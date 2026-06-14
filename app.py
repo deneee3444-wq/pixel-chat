@@ -30,7 +30,6 @@ AVAILABLE_MODELS = [
     "qwen3-vl-235b", "qwen3.5-35b-a3b", "qwen3.6-plus"
 ]
 
-# In-memory session store  { sid -> {...} }
 _sessions = {}
 
 
@@ -44,17 +43,63 @@ def get_sess():
 
 def new_sess(sid):
     _sessions[sid] = {
-        'token': None, 'user_id': None, 'conv_id': None,
-        'model': AVAILABLE_MODELS[0], 'history': [],
+        'token': None, 'user_id': None,
+        'api_conv_id': None,          # aktif Supabase conversation ID
+        'own_api_conv_ids': set(),    # bu hesaba ait tüm api_conv_id'ler
+        'model': AVAILABLE_MODELS[0],
+        'history': [],                # aktif konuşmanın history'si
         'email': None, 'password': DEFAULT_PASSWORD,
         'upload_cache': {}, 'total_credits': 0,
-        'total_cost': 0.0, 'carry_history': None,
-        'conversations': [],
+        'total_cost': 0.0,
+        'conversations': [],          # [{'conv_id', 'api_conv_id'|None, 'title', 'history'}]
+        'active_local_conv_id': None,
+        'pending_context': None,      # eski konuşmadan taşınan bağlam (bir sonraki mesaja gömülecek)
     }
     return _sessions[sid]
 
+
+def format_history_context(history):
+    """
+    Eski/başka hesaba ait konuşma geçmişini, modele gönderilecek mesajın
+    içine gömülecek bir bağlam metnine çevirir. Kullanıcıya ekranda
+    gösterilmez — sadece API'ye giden mesajın başına eklenir.
+    """
+    if not history:
+        return None
+
+    lines = [
+        "[ÖNCEKİ KONUŞMA - sadece bağlam içindir, buna doğrudan cevap verme. "
+        "Kullanıcının asıl mesajı bu bloğun ALTINDADIR.]"
+    ]
+    for turn in history:
+        role = turn.get('role')
+        content = turn.get('content')
+        text = ''
+        has_img = False
+        if isinstance(content, list):
+            text = next((i.get('text', '') for i in content if i.get('type') == 'text'), '')
+            has_img = any(i.get('type') == 'image_url' for i in content)
+        else:
+            text = content or ''
+
+        if has_img and text:
+            text = f"{text} [+ görsel ekli]"
+        elif has_img:
+            text = "[görsel gönderildi]"
+
+        prefix = "Kullanıcı" if role == 'user' else "Asistan"
+        lines.append(f"{prefix}: {text}")
+
+    lines.append("[ÖNCEKİ KONUŞMA SONU]")
+    lines.append("")
+    lines.append("Kullanıcının asıl/yeni mesajı:")
+    return "\n".join(lines)
+
+def make_local_conv_id():
+    return 'conv_' + uuid.uuid4().hex[:12]
+
 def save_conv_to_history(sess):
-    """Mevcut konuşmayı geçmiş listesine kaydet."""
+    """Aktif konuşmayı geçmiş listesine kaydet / güncelle."""
     history = sess.get('history', [])
     if not history:
         return
@@ -68,8 +113,26 @@ def save_conv_to_history(sess):
                 title = str(content)
             title = (title[:48] + '…') if len(title) > 48 else title
             break
+
     convs = sess.setdefault('conversations', [])
-    convs.insert(0, {'title': title, 'history': history[:]})
+    local_id  = sess.get('active_local_conv_id')
+    api_id    = sess.get('api_conv_id')
+
+    if local_id:
+        for c in convs:
+            if c.get('conv_id') == local_id:
+                c['title']      = title
+                c['history']    = history[:]
+                c['api_conv_id'] = api_id
+                return
+        convs.insert(0, {'conv_id': local_id, 'api_conv_id': api_id,
+                          'title': title, 'history': history[:]})
+    else:
+        new_id = make_local_conv_id()
+        sess['active_local_conv_id'] = new_id
+        convs.insert(0, {'conv_id': new_id, 'api_conv_id': api_id,
+                          'title': title, 'history': history[:]})
+
     sess['conversations'] = convs[:30]
 
 
@@ -157,8 +220,11 @@ def create_conversation(token, user_id, model_id):
 
 
 # ===================== CHAT STREAM =====================
-def stream_message(token, conv_id, message, model_id, history=None, attachments=None):
-    """SSE generator for streaming chat."""
+def stream_message(token, api_conv_id, message, model_id, history=None, attachments=None):
+    """
+    history: konuşma bağlamı — Supabase bu parametreyi alıp modele geçiriyor.
+    Yeni hesapta bile history göndererek eski konuşma bağlamı korunur.
+    """
     if history is None: history = []
     if attachments is None: attachments = []
 
@@ -169,9 +235,12 @@ def stream_message(token, conv_id, message, model_id, history=None, attachments=
         "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
     }
     payload = {
-        "conversation_id": conv_id, "model_id": model_id,
-        "message": message, "attachments": attachments,
-        "incognito": False, "history": history,
+        "conversation_id": api_conv_id,
+        "model_id": model_id,
+        "message": message,
+        "attachments": attachments,
+        "incognito": False,
+        "history": history,   # bağlam — yeni hesapta da çalışır
     }
 
     full_response = ""
@@ -216,30 +285,6 @@ def stream_message(token, conv_id, message, model_id, history=None, attachments=
         yield f"data: {json.dumps({'type': 'error', 'code': str(e)})}\n\n"
 
 
-def build_carried_message(carry_history, new_user_input):
-    lines = []
-    carried_attachments = []
-    for turn in carry_history:
-        role = turn["role"]
-        content = turn["content"]
-        if role == "user":
-            if isinstance(content, list):
-                text_part = ""
-                for item in content:
-                    if item.get("type") == "text":
-                        text_part = item["text"]
-                    elif item.get("type") == "image_url":
-                        carried_attachments.append({"url": item["image_url"]["url"], "type": "image/png"})
-                lines.append(f"user: {text_part}")
-            else:
-                lines.append(f"user: {content}")
-        else:
-            lines.append(f"assistant: {content}")
-    history_text = "\n".join(lines)
-    full_message = f"[Önceki Konuşma]\n{history_text}\n\n[Yeni Mesaj]\n{new_user_input}"
-    return full_message, carried_attachments
-
-
 # ===================== ROUTES =====================
 @app.route('/')
 def index():
@@ -273,8 +318,6 @@ def api_status():
 @app.route('/api/init', methods=['POST'])
 def api_init():
     data = request.json or {}
-
-    # Şifre kontrolü
     if data.get('password') != APP_PASSWORD:
         return jsonify({'success': False, 'error': 'Hatalı şifre.'}), 401
 
@@ -287,18 +330,19 @@ def api_init():
 
     email, password = register()
     if not email:
-        return jsonify({'success': False, 'error': 'Hesap oluşturulamadı. Lütfen tekrar deneyin.'}), 500
+        return jsonify({'success': False, 'error': 'Hesap oluşturulamadı.'}), 500
 
     token, user_id = do_login(email, password)
     if not token:
         return jsonify({'success': False, 'error': 'Giriş başarısız.'}), 500
 
-    conv_id = create_conversation(token, user_id, model)
-    if not conv_id:
+    api_conv_id = create_conversation(token, user_id, model)
+    if not api_conv_id:
         return jsonify({'success': False, 'error': 'Konuşma başlatılamadı.'}), 500
 
-    sess.update({'token': token, 'user_id': user_id, 'conv_id': conv_id,
+    sess.update({'token': token, 'user_id': user_id, 'api_conv_id': api_conv_id,
                  'email': email, 'password': password})
+    sess['own_api_conv_ids'].add(api_conv_id)
 
     resp = jsonify({'success': True, 'email': email, 'model': model})
     resp.set_cookie('pb_sid', sid, max_age=86400 * 30, samesite='Lax')
@@ -309,31 +353,40 @@ def api_init():
 def api_send():
     sess = get_sess()
     if not sess or not sess.get('token'):
-        return jsonify({'error': 'Oturum bulunamadı. Lütfen yenileyin.'}), 401
+        return jsonify({'error': 'Oturum bulunamadı.'}), 401
 
-    data = request.json or {}
-    message = data.get('message', '').strip()
+    data        = request.json or {}
+    message     = data.get('message', '').strip()
     attachments = data.get('attachments', [])
 
     if not message:
         return jsonify({'error': 'Mesaj boş.'}), 400
 
-    token = sess['token']
-    conv_id = sess['conv_id']
-    model = sess['model']
-    history = sess.get('history', [])
-    carry = sess.pop('carry_history', None)
+    token       = sess['token']
+    api_conv_id = sess['api_conv_id']
+    model       = sess['model']
 
-    if carry:
-        final_message, carried_atts = build_carried_message(carry, message)
-        final_atts = carried_atts + attachments
+    # Eski/başka hesaba ait konuşmadan devam ediliyorsa, o geçmiş bu yeni
+    # api_conv_id'de mevcut değildir. Bu yüzden bağlamı API'ye giden mesajın
+    # içine gömüyoruz; ekranda kullanıcıya yalnızca kendi yazdığı mesaj görünür.
+    pending_context = sess.pop('pending_context', None)
+    if pending_context:
+        api_message = f"{pending_context}\n{message}"
     else:
-        final_message = message
-        final_atts = attachments
+        api_message = message
+
+    is_new_conv = not sess.get('active_local_conv_id')
 
     def generate():
         full_response = ""
-        for event in stream_message(token, conv_id, final_message, model, history, final_atts):
+        local_conv_id = sess.get('active_local_conv_id')
+
+        if is_new_conv:
+            local_conv_id = make_local_conv_id()
+            sess['active_local_conv_id'] = local_conv_id
+            yield f"data: {json.dumps({'type': 'conv_id', 'conv_id': local_conv_id})}\n\n"
+
+        for event in stream_message(token, api_conv_id, api_message, model, [], attachments):
             yield event
             if event.startswith("data: "):
                 try:
@@ -346,9 +399,9 @@ def api_send():
                             [{"type": "image_url", "image_url": {"url": a["url"]}} for a in attachments]
                             + [{"type": "text", "text": message}]
                         ) if attachments else message
-                        history.append({"role": "user", "content": user_content})
-                        history.append({"role": "assistant", "content": fr})
-                        sess['history'] = history
+                        sess['history'].append({"role": "user", "content": user_content})
+                        sess['history'].append({"role": "assistant", "content": fr})
+                        save_conv_to_history(sess)
                     elif d.get('type') == 'billing':
                         sess['total_credits'] += d.get('credits', 0)
                         sess['total_cost'] += d.get('cost', 0.0)
@@ -378,32 +431,44 @@ def api_upload():
                       files=files, timeout=30)
     if r.status_code == 200:
         url = r.json().get("url")
+        sess.setdefault('upload_cache', {})[url or str(uuid.uuid4())] = {
+            'url': url, 'conv_id': request.form.get('conv_id'), 'filename': file.filename
+        }
         return jsonify({'url': url, 'type': 'image/png', 'name': file.filename})
     return jsonify({'error': f'Yükleme başarısız ({r.status_code})'}), 500
 
 
 @app.route('/api/reset', methods=['POST'])
 def api_reset():
-    data = request.json or {}
-    carry = data.get('carry_history', False)
+    data          = request.json or {}
+    carry         = data.get('carry_history', False)
+    carry_conv_id = data.get('conv_id')
 
-    sid = get_sid() or str(uuid.uuid4())
+    sid      = get_sid() or str(uuid.uuid4())
     old_sess = get_sess()
+    model    = old_sess.get('model', AVAILABLE_MODELS[0]) if old_sess else AVAILABLE_MODELS[0]
 
-    # Mevcut modeli koru
-    model = old_sess.get('model', AVAILABLE_MODELS[0]) if old_sess else AVAILABLE_MODELS[0]
-    carry_history = old_sess.get('history', []) if (carry and old_sess) else []
+    # Taşınacak geçmişi ve local_id'yi bul
+    carry_history  = []
+    carry_local_id = None
+    if carry and old_sess:
+        if carry_conv_id:
+            for c in old_sess.get('conversations', []):
+                if c.get('conv_id') == carry_conv_id:
+                    carry_history  = c['history'][:]
+                    carry_local_id = carry_conv_id
+                    break
+        if not carry_history:
+            carry_history  = old_sess.get('history', [])
+            carry_local_id = old_sess.get('active_local_conv_id')
 
-    # Mevcut konuşmayı geçmişe kaydet
     if old_sess:
         save_conv_to_history(old_sess)
     old_conversations = old_sess.get('conversations', []) if old_sess else []
 
     sess = new_sess(sid)
-    sess['model'] = model
-    sess['conversations'] = old_conversations
-    if carry_history:
-        sess['carry_history'] = carry_history
+    sess['model']         = model
+    sess['conversations'] = old_conversations   # tüm geçmiş taşınsın
 
     email, password = register()
     if not email:
@@ -413,14 +478,35 @@ def api_reset():
     if not token:
         return jsonify({'success': False, 'error': 'Giriş başarısız.'}), 500
 
-    conv_id = create_conversation(token, user_id, model)
-    if not conv_id:
+    # Yeni hesap için taze bir conversation aç
+    api_conv_id = create_conversation(token, user_id, model)
+    if not api_conv_id:
         return jsonify({'success': False, 'error': 'Konuşma başlatılamadı.'}), 500
 
-    sess.update({'token': token, 'user_id': user_id, 'conv_id': conv_id,
+    sess.update({'token': token, 'user_id': user_id, 'api_conv_id': api_conv_id,
                  'email': email, 'password': password})
+    sess['own_api_conv_ids'].add(api_conv_id)
 
-    resp = jsonify({'success': True, 'email': email, 'model': model, 'carried': bool(carry_history)})
+    new_conv_id = None
+    if carry_history:
+        # Geçmişi session'a yükle (ekranda görünür); ayrıca bir sonraki
+        # mesaja gömülecek bağlam olarak işaretle — model yeni hesapta
+        # bu geçmişi bilmediği için.
+        sess['history']              = carry_history
+        sess['active_local_conv_id'] = carry_local_id
+        sess['pending_context']      = format_history_context(carry_history)
+        new_conv_id                  = carry_local_id
+        # conversations listesindeki kaydın api_conv_id'sini güncelle
+        for c in sess['conversations']:
+            if c.get('conv_id') == carry_local_id:
+                c['api_conv_id'] = api_conv_id
+                break
+
+    resp_data = {
+        'success': True, 'email': email, 'model': model,
+        'carried': bool(carry_history), 'new_conv_id': new_conv_id,
+    }
+    resp = jsonify(resp_data)
     resp.set_cookie('pb_sid', sid, max_age=86400 * 30, samesite='Lax')
     return resp
 
@@ -436,10 +522,12 @@ def api_model():
         return jsonify({'error': 'Geçersiz model'}), 400
 
     sess['model'] = model
-    conv_id = create_conversation(sess['token'], sess['user_id'], model)
-    if conv_id:
-        sess['conv_id'] = conv_id
+    api_conv_id = create_conversation(sess['token'], sess['user_id'], model)
+    if api_conv_id:
+        sess['api_conv_id'] = api_conv_id
+        sess['own_api_conv_ids'].add(api_conv_id)
         sess['history'] = []
+        sess['active_local_conv_id'] = None
 
     return jsonify({'success': True, 'model': model})
 
@@ -451,9 +539,11 @@ def api_clear():
         return jsonify({'error': 'Oturum yok'}), 401
     save_conv_to_history(sess)
     sess['history'] = []
-    conv_id = create_conversation(sess['token'], sess['user_id'], sess['model'])
-    if conv_id:
-        sess['conv_id'] = conv_id
+    sess['active_local_conv_id'] = None
+    api_conv_id = create_conversation(sess['token'], sess['user_id'], sess['model'])
+    if api_conv_id:
+        sess['api_conv_id'] = api_conv_id
+        sess['own_api_conv_ids'].add(api_conv_id)
     return jsonify({'success': True})
 
 
@@ -464,10 +554,10 @@ def api_history():
         return jsonify({'history': []})
     simplified = []
     for turn in sess.get('history', []):
-        role = turn['role']
+        role    = turn['role']
         content = turn['content']
         if isinstance(content, list):
-            text = next((i['text'] for i in content if i.get('type') == 'text'), '')
+            text   = next((i['text'] for i in content if i.get('type') == 'text'), '')
             images = [i['image_url']['url'] for i in content if i.get('type') == 'image_url']
             simplified.append({'role': role, 'text': text, 'images': images})
         else:
@@ -481,9 +571,67 @@ def api_conversations():
     if not sess:
         return jsonify({'conversations': []})
     convs = sess.get('conversations', [])
-    result = [{'idx': i, 'title': c['title'], 'count': len(c['history']) // 2}
-              for i, c in enumerate(convs)]
+    result = [
+        {
+            'idx':     i,
+            'conv_id': c.get('conv_id', str(i)),
+            'title':   c['title'],
+            'count':   len(c['history']) // 2,
+        }
+        for i, c in enumerate(convs)
+    ]
     return jsonify({'conversations': result})
+
+
+def _switch_to_conv(sess, conv_id):
+    """
+    Verilen local conv_id'ye geç.
+
+    Bu hesapta zaten kendine ait bir api_conv_id'si olan konuşma
+    (api_conv_id own_api_conv_ids içinde):
+        → o api_conv_id'ye dön, history'yi yükle. Model zaten biliyor,
+          ekstra bağlam göndermeye gerek yok.
+
+    Bu hesapta hiç kullanılmamış konuşma (başka/eski hesaba ait
+    veya api_conv_id yok):
+        → bu konuşmaya ÖZEL, taze bir Supabase conversation_id aç.
+          Böylece farklı local konuşmalar aynı conversation_id'yi
+          paylaşıp birbirine karışmaz. history'yi sess['history']'e
+          yükle (ekranda görünür) ve 'pending_context' olarak işaretle —
+          bir sonraki /api/send bu bağlamı yeni mesajın içine gömüp
+          gönderir, ekranda ise sadece kullanıcının yazdığı mesaj görünür.
+    """
+    convs = sess.get('conversations', [])
+    for c in convs:
+        if c.get('conv_id') == conv_id:
+            save_conv_to_history(sess)
+
+            stored_api_id   = c.get('api_conv_id')
+            own_ids         = sess.get('own_api_conv_ids', set())
+            history         = c['history'][:]
+
+            if stored_api_id and stored_api_id in own_ids:
+                # Bu konuşma için bu hesapta zaten ayrılmış bir conversation var
+                sess['api_conv_id']     = stored_api_id
+                sess['pending_context'] = None
+            else:
+                # Bu konuşma bu hesapta hiç kullanılmadı — kendine özel taze
+                # bir conversation aç ki diğer konuşmalarla karışmasın
+                new_api_id = create_conversation(sess['token'], sess['user_id'], sess['model'])
+                if new_api_id:
+                    sess['own_api_conv_ids'].add(new_api_id)
+                    sess['api_conv_id'] = new_api_id
+                    c['api_conv_id']    = new_api_id
+                else:
+                    # Beklenmedik hata — mevcut conversation'ı kullanmaya devam et
+                    c['api_conv_id'] = sess['api_conv_id']
+                sess['pending_context'] = format_history_context(history)
+
+            sess['history']              = history
+            sess['active_local_conv_id'] = conv_id
+            return True, conv_id, len(history) // 2
+
+    return False, None, 0
 
 
 @app.route('/api/conversation/load', methods=['POST'])
@@ -492,24 +640,27 @@ def api_conversation_load():
     if not sess or not sess.get('token'):
         return jsonify({'error': 'Oturum yok'}), 401
 
-    save_conv_to_history(sess)
+    data    = request.json or {}
+    conv_id = data.get('conv_id')
+    idx     = data.get('idx')
 
-    data = request.json or {}
-    idx = data.get('idx', 0)
     convs = sess.get('conversations', [])
 
-    if idx < 0 or idx >= len(convs):
-        return jsonify({'error': 'Geçersiz konuşma'}), 400
+    if not conv_id and idx is not None:
+        try:
+            i = int(idx)
+            if 0 <= i < len(convs):
+                conv_id = convs[i].get('conv_id', str(i))
+        except (ValueError, TypeError):
+            pass
 
-    conv = convs.pop(idx)
-    sess['conversations'] = convs
-    sess['history'] = conv['history']
+    if not conv_id:
+        return jsonify({'error': 'Konuşma bulunamadı'}), 404
 
-    conv_id = create_conversation(sess['token'], sess['user_id'], sess['model'])
-    if conv_id:
-        sess['conv_id'] = conv_id
-
-    return jsonify({'success': True, 'message_count': len(conv['history']) // 2})
+    ok, cid, msg_count = _switch_to_conv(sess, conv_id)
+    if ok:
+        return jsonify({'success': True, 'conv_id': cid, 'message_count': msg_count})
+    return jsonify({'error': 'Konuşma bulunamadı'}), 404
 
 
 if __name__ == '__main__':
