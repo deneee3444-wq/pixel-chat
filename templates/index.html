@@ -645,7 +645,33 @@ const S = {
   pendingAtts: [],   // [{url, type, name}]
   streaming: false,
   activeConvIdx: null,
+  activeConvId: null,   // stable string ID (e.g. "conv_abc123")
 };
+
+// ─── URL / HISTORY HELPERS ────────────────────────────────────────────
+function getUrlConvId() {
+  return new URLSearchParams(window.location.search).get('conv') || null;
+}
+
+function setUrlConvId(convId) {
+  const url = new URL(window.location.href);
+  if (convId) {
+    url.searchParams.set('conv', convId);
+  } else {
+    url.searchParams.delete('conv');
+  }
+  window.history.pushState({convId}, '', url.toString());
+}
+
+// Handle browser back/forward
+window.addEventListener('popstate', async (e) => {
+  const convId = (e.state && e.state.convId) || getUrlConvId();
+  if (convId && document.getElementById('app').style.display !== 'none') {
+    await loadConversationById(convId);
+  } else if (!convId && document.getElementById('app').style.display !== 'none') {
+    await newChatSilent();
+  }
+});
 
 // ─── INIT ─────────────────────────────────────────────────────────────
 async function boot() {
@@ -666,8 +692,15 @@ async function boot() {
     S.msgCount = st.message_count;
     enterApp();
     updateSidebar();
-    await loadHistory();
     await refreshConversations();
+
+    // Restore conversation from URL if present
+    const urlConvId = getUrlConvId();
+    if (urlConvId) {
+      await loadConversationById(urlConvId);
+    } else {
+      await loadHistory();
+    }
   } else {
     document.getElementById('setupOverlay').style.display = 'flex';
   }
@@ -766,35 +799,43 @@ function updateSidebar() {
 async function refreshConversations() {
   try {
     const r = await fetch('/api/conversations').then(r=>r.json());
-    renderConversationList(r.conversations || [], S.activeConvIdx);
+    renderConversationList(r.conversations || [], S.activeConvId);
   } catch(e) {}
 }
 
-function renderConversationList(convs, activeIdx) {
+function renderConversationList(convs, activeConvId) {
   const el = document.getElementById('convList');
   if (!convs || convs.length === 0) {
     el.innerHTML = '<div class="conv-empty">Henüz konuşma yok</div>';
     return;
   }
-  el.innerHTML = convs.map(c => `
-    <button class="conv-item${c.idx === activeIdx ? ' active' : ''}" onclick="loadConversation(${c.idx})">
+  el.innerHTML = convs.map(c => {
+    // Support both conv_id (string) and idx (number) from server
+    const cid = c.conv_id || String(c.idx);
+    const isActive = cid === activeConvId || String(c.idx) === activeConvId;
+    return `
+    <button class="conv-item${isActive ? ' active' : ''}" onclick="loadConversationById('${escHtml(cid)}')">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
       <span class="conv-item-title">${escHtml(c.title)}</span>
       <span class="conv-item-count">${c.count}</span>
     </button>
-  `).join('');
+  `}).join('');
 }
 
-async function loadConversation(idx) {
+async function loadConversationById(convId) {
   try {
+    // Try conv_id first, fall back to idx
+    const body = isNaN(convId) ? {conv_id: convId} : {idx: Number(convId)};
     const r = await fetch('/api/conversation/load', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({idx})
+      body: JSON.stringify(body)
     });
     const d = await r.json();
     if (d.success) {
       S.msgCount = d.message_count;
-      S.activeConvIdx = idx;
+      S.activeConvIdx = d.idx !== undefined ? d.idx : S.activeConvIdx;
+      S.activeConvId = d.conv_id || convId;
+      setUrlConvId(S.activeConvId);
       updateSidebar();
       await loadHistory();
       await refreshConversations();
@@ -805,6 +846,10 @@ async function loadConversation(idx) {
   } catch(e) {
     toast('Bağlantı hatası', 'error');
   }
+}
+
+async function loadConversation(idx) {
+  await loadConversationById(String(idx));
 }
 
 function escHtml(str) {
@@ -859,7 +904,11 @@ async function sendMessage() {
   try {
     const resp = await fetch('/api/send', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({message: msg, attachments: atts.map(a=>({url:a.url,type:a.type}))})
+      body: JSON.stringify({
+        message: msg,
+        attachments: atts.map(a=>({url:a.url,type:a.type})),
+        conv_id: S.activeConvId || null
+      })
     });
 
     if (!resp.ok) {
@@ -891,12 +940,21 @@ async function sendMessage() {
             full += d.content;
             renderMarkdown(textNode, full, true);
             scrollBottom();
+          } else if (d.type === 'conv_id') {
+            // Server just told us the conversation ID for this chat
+            if (d.conv_id && !S.activeConvId) {
+              S.activeConvId = d.conv_id;
+              setUrlConvId(S.activeConvId);
+              await refreshConversations();
+            }
           } else if (d.type === 'billing') {
             // billing data tracked server-side
           } else if (d.type === 'done') {
             renderMarkdown(textNode, d.full_response || full, false);
             S.msgCount++;
             updateSidebar();
+            // Refresh conv list to show new/updated conversation
+            await refreshConversations();
           } else if (d.type === 'error') {
             if (d.code === 'INSUFFICIENT_CREDITS') {
               renderMarkdown(textNode, full || '', false);
@@ -1004,6 +1062,7 @@ async function handleFiles(input) {
     toast(`${file.name} yükleniyor...`);
     const fd = new FormData();
     fd.append('file', file);
+    if (S.activeConvId) fd.append('conv_id', S.activeConvId);
     try {
       const r = await fetch('/api/upload', {method:'POST', body:fd});
       const d = await r.json();
@@ -1058,10 +1117,22 @@ async function changeModel(model) {
 }
 
 // ─── ACTIONS ───────────────────────────────────────────────────────────
+async function newChatSilent() {
+  // Internal: clear state without API call (used for popstate)
+  S.msgCount = 0;
+  S.activeConvIdx = null;
+  S.activeConvId = null;
+  updateSidebar();
+  clearMessages();
+  await refreshConversations();
+}
+
 async function newChat() {
   await fetch('/api/clear', {method:'POST'});
   S.msgCount = 0;
   S.activeConvIdx = null;
+  S.activeConvId = null;
+  setUrlConvId(null);
   updateSidebar();
   clearMessages();
   await refreshConversations();
@@ -1073,6 +1144,8 @@ async function clearHistory() {
   await fetch('/api/clear', {method:'POST'});
   S.msgCount = 0;
   S.activeConvIdx = null;
+  S.activeConvId = null;
+  setUrlConvId(null);
   updateSidebar();
   clearMessages();
   await refreshConversations();
@@ -1122,7 +1195,10 @@ async function doReset(carry, modalId, btnId) {
   try {
     const r = await fetch('/api/reset', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({carry_history: carry})
+      body: JSON.stringify({
+        carry_history: carry,
+        conv_id: S.activeConvId || null   // tell server which conv to carry
+      })
     });
     const d = await r.json();
 
@@ -1134,9 +1210,22 @@ async function doReset(carry, modalId, btnId) {
       S.msgCount = 0;
       closeModal(modalId);
       updateSidebar();
-      await refreshConversations();
-      if (!carry) clearMessages();
-      else toast('Geçmiş yeni hesaba taşındı', 'success');
+
+      if (carry && d.new_conv_id) {
+        // New account created; restore to the same conversation (now under new account)
+        S.activeConvId = d.new_conv_id;
+        S.activeConvIdx = d.new_conv_idx !== undefined ? d.new_conv_idx : null;
+        setUrlConvId(S.activeConvId);
+        await refreshConversations();
+        await loadHistory();
+        toast('Geçmiş yeni hesaba taşındı', 'success');
+      } else {
+        S.activeConvId = null;
+        S.activeConvIdx = null;
+        setUrlConvId(null);
+        await refreshConversations();
+        if (!carry) clearMessages();
+      }
       toast(`Yeni hesap: ${d.email}`, 'success');
     } else {
       toast(d.error || 'Sıfırlama başarısız', 'error');
@@ -1159,13 +1248,16 @@ async function quickCreateAccount() {
   try {
     const r = await fetch('/api/reset', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({carry_history: false})
+      body: JSON.stringify({carry_history: false, conv_id: null})
     });
     const d = await r.json();
     if (d.success) {
       S.email = d.email;
       S.model = d.model || S.model;
       S.msgCount = 0;
+      S.activeConvId = null;
+      S.activeConvIdx = null;
+      setUrlConvId(null);
       updateSidebar();
       clearMessages();
       await refreshConversations();
