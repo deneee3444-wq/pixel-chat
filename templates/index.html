@@ -31,7 +31,7 @@
   --sidebar-w: 260px;
 }
 
-html,body{height:100%;overflow:hidden}
+html,body{height:100%;height:100dvh;overflow:hidden}
 body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.6}
 
 /* ─── SCROLLBAR ─── */
@@ -103,7 +103,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
 @keyframes dot-bounce{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-6px)}}
 
 /* ─── APP LAYOUT ─── */
-.app{display:flex;height:100vh}
+.app{display:flex;height:100vh;height:100dvh}
 
 /* ─── SIDEBAR ─── */
 .sidebar{
@@ -150,8 +150,8 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
 .conv-list{
   padding:0 10px;
   overflow-y:auto;
-  max-height:200px;
-  flex-shrink:0;
+  flex:1;
+  min-height:0;
 }
 .conv-empty{padding:6px 12px;font-size:12px;color:var(--text3);font-style:italic}
 .conv-item{
@@ -161,6 +161,8 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
   font-family:inherit;width:100%;text-align:left;margin-bottom:1px;
 }
 .conv-item:hover{background:var(--surface2);color:var(--text)}
+.conv-item.active{background:var(--accent-dim);color:var(--text);border:1px solid rgba(124,58,237,.2)}
+.conv-item.active svg{opacity:.9}
 .conv-item svg{flex-shrink:0;opacity:.5}
 .conv-item:hover svg{opacity:.8}
 .conv-item-title{
@@ -454,15 +456,27 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
   .sidebar{
     position:fixed;left:0;top:0;bottom:0;z-index:60;
     transform:translateX(-100%);
+    width:min(var(--sidebar-w), 85vw);
+    min-width:unset;
   }
   .sidebar.open{transform:translateX(0)}
-  .sidebar-overlay{display:block}
+  .sidebar-overlay{display:none;position:fixed;inset:0;z-index:59;background:rgba(0,0,0,.6)}
+  .sidebar-overlay.active{display:block}
   .topbar{display:flex}
-  .app{flex-direction:column}
-  .chat-area{height:100vh;padding-top:0}
-  .input-area{padding:8px 12px 16px}
-  .messages{padding:16px 0 4px}
+  .app{flex-direction:column;height:100dvh}
+  .chat-area{
+    flex:1;min-height:0;
+    display:flex;flex-direction:column;
+  }
+  .messages{flex:1;min-height:0;padding:12px 0 4px}
+  .input-area{
+    padding:8px 12px env(safe-area-inset-bottom, 12px);
+    flex-shrink:0;
+  }
   .messages-inner{padding:0 12px}
+  .msg-images img{max-width:min(200px,60vw)}
+  .setup-card{padding:32px 24px}
+  .modal{padding:24px 20px}
 }
 </style>
 </head>
@@ -630,6 +644,7 @@ const S = {
   msgCount: 0,
   pendingAtts: [],   // [{url, type, name}]
   streaming: false,
+  activeConvIdx: null,
 };
 
 // ─── INIT ─────────────────────────────────────────────────────────────
@@ -751,18 +766,18 @@ function updateSidebar() {
 async function refreshConversations() {
   try {
     const r = await fetch('/api/conversations').then(r=>r.json());
-    renderConversationList(r.conversations || []);
+    renderConversationList(r.conversations || [], S.activeConvIdx);
   } catch(e) {}
 }
 
-function renderConversationList(convs) {
+function renderConversationList(convs, activeIdx) {
   const el = document.getElementById('convList');
   if (!convs || convs.length === 0) {
     el.innerHTML = '<div class="conv-empty">Henüz konuşma yok</div>';
     return;
   }
   el.innerHTML = convs.map(c => `
-    <button class="conv-item" onclick="loadConversation(${c.idx})">
+    <button class="conv-item${c.idx === activeIdx ? ' active' : ''}" onclick="loadConversation(${c.idx})">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
       <span class="conv-item-title">${escHtml(c.title)}</span>
       <span class="conv-item-count">${c.count}</span>
@@ -779,6 +794,7 @@ async function loadConversation(idx) {
     const d = await r.json();
     if (d.success) {
       S.msgCount = d.message_count;
+      S.activeConvIdx = idx;
       updateSidebar();
       await loadHistory();
       await refreshConversations();
@@ -1045,6 +1061,7 @@ async function changeModel(model) {
 async function newChat() {
   await fetch('/api/clear', {method:'POST'});
   S.msgCount = 0;
+  S.activeConvIdx = null;
   updateSidebar();
   clearMessages();
   await refreshConversations();
@@ -1055,6 +1072,7 @@ async function clearHistory() {
   if (!confirm('Sohbet geçmişi silinsin mi?')) return;
   await fetch('/api/clear', {method:'POST'});
   S.msgCount = 0;
+  S.activeConvIdx = null;
   updateSidebar();
   clearMessages();
   await refreshConversations();
@@ -1173,11 +1191,11 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') {
 // ─── SIDEBAR (mobile) ─────────────────────────────────────────────────
 function openSidebar() {
   document.getElementById('sidebar').classList.add('open');
-  document.getElementById('sidebarOverlay').style.display = 'block';
+  document.getElementById('sidebarOverlay').classList.add('active');
 }
 function closeSidebar() {
   document.getElementById('sidebar').classList.remove('open');
-  document.getElementById('sidebarOverlay').style.display = 'none';
+  document.getElementById('sidebarOverlay').classList.remove('active');
 }
 
 // ─── TOAST ────────────────────────────────────────────────────────────
