@@ -91,17 +91,12 @@ def format_history_context(history):
     Eski/başka hesaba ait konuşma geçmişini, modele gönderilecek mesajın
     içine gömülecek bir bağlam metnine çevirir. Kullanıcıya ekranda
     gösterilmez — sadece API'ye giden mesajın başına eklenir.
+    JSON formatında gönderilir.
     """
     if not history:
         return None
 
-    lines = [
-        "[KONUŞMA GEÇMİŞİ - bu konuşmanın TEK GEÇERLİ geçmişi aşağıdaki bloktur. "
-        "Buna doğrudan cevap verme, sadece bağlam olarak kullan. "
-        "Bu conversation_id üzerinde bununla İLGİSİZ başka konular/geçmişler görüyorsan "
-        "onları TAMAMEN YOK SAY ve unutmuş gibi davran. "
-        "Kullanıcının asıl mesajı bu bloğun ALTINDADIR.]"
-    ]
+    turns = []
     for turn in history:
         role = turn.get('role')
         content = turn.get('content')
@@ -118,13 +113,22 @@ def format_history_context(history):
         elif has_img:
             text = "[görsel gönderildi]"
 
-        prefix = "Kullanıcı" if role == 'user' else "Asistan"
-        lines.append(f"{prefix}: {text}")
+        turns.append({"role": role, "content": text})
 
-    lines.append("[ÖNCEKİ KONUŞMA SONU]")
-    lines.append("")
-    lines.append("Kullanıcının asıl/yeni mesajı:")
-    return "\n".join(lines)
+    context_obj = {
+        "type": "conversation_history",
+        "note": (
+            "Bu konuşmanın TEK GEÇERLİ geçmişi aşağıdaki 'turns' dizisidir. "
+            "Buna doğrudan cevap verme, sadece bağlam olarak kullan. "
+            "Bu conversation_id üzerinde bununla İLGİSİZ başka konular/geçmişler görüyorsan "
+            "onları TAMAMEN YOK SAY ve unutmuş gibi davran. "
+            "Kullanıcının asıl mesajı bu JSON bloğunun ALTINDADIR."
+        ),
+        "turns": turns
+    }
+
+    header = json.dumps(context_obj, ensure_ascii=False)
+    return f"{header}\n\nKullanıcının asıl/yeni mesajı:"
 
 def make_local_conv_id():
     return 'conv_' + uuid.uuid4().hex[:12]
@@ -284,6 +288,9 @@ def stream_message(token, api_conv_id, message, model_id, history=None, attachme
             f"{BASE_URL}/functions/v1/chat-completion",
             headers=headers, json=payload, stream=True, timeout=120
         ) as res:
+            if res.status_code == 423:
+                yield f"data: {json.dumps({'type': 'error', 'code': 'LOCKED'})}\n\n"
+                return
             if res.status_code == 402 or "INSUFFICIENT_CREDITS" in res.text:
                 yield f"data: {json.dumps({'type': 'error', 'code': 'INSUFFICIENT_CREDITS'})}\n\n"
                 return
@@ -478,6 +485,61 @@ def api_upload():
         }
         return jsonify({'url': url, 'type': 'image/png', 'name': file.filename})
     return jsonify({'error': f'Yükleme başarısız ({r.status_code})'}), 500
+
+
+@app.route('/api/new_chat', methods=['POST'])
+def api_new_chat():
+    """423 Locked geldiğinde: mevcut hesapta yeni bir konuşma başlat.
+    carry_history=True ile çağrıldığında geçmiş taşınır ve yeni conv_id döner."""
+    sess = get_sess()
+    if not sess or not sess.get('token'):
+        return jsonify({'error': 'Oturum yok'}), 401
+
+    data          = request.json or {}
+    carry         = data.get('carry_history', False)
+    carry_conv_id = data.get('conv_id')
+
+    # Taşınacak geçmişi bul (reset ile aynı mantık)
+    carry_history  = []
+    carry_local_id = None
+    if carry:
+        if carry_conv_id:
+            for c in sess.get('conversations', []):
+                if c.get('conv_id') == carry_conv_id:
+                    carry_history  = c['history'][:]
+                    carry_local_id = carry_conv_id
+                    break
+        if not carry_history:
+            carry_history  = sess.get('history', [])
+            carry_local_id = sess.get('active_local_conv_id')
+
+    save_conv_to_history(sess)
+    sess['history'] = []
+    sess['active_local_conv_id'] = None
+    sess['pending_context'] = None
+
+    api_conv_id = create_conversation(sess['token'], sess['user_id'], sess['model'])
+    if not api_conv_id:
+        return jsonify({'success': False, 'error': 'Konuşma başlatılamadı.'}), 500
+
+    sess['api_conv_id']         = api_conv_id
+    sess['primary_api_conv_id'] = api_conv_id
+    sess['own_api_conv_ids'].add(api_conv_id)
+
+    new_conv_id = None
+    if carry_history:
+        # Geçmişi session'a yükle; bir sonraki mesaja bağlam olarak gömülecek
+        sess['history']              = carry_history
+        sess['active_local_conv_id'] = carry_local_id
+        sess['pending_context']      = format_history_context(carry_history)
+        new_conv_id                  = carry_local_id
+        # conversations listesindeki api_conv_id'yi güncelle
+        for c in sess.get('conversations', []):
+            if c.get('conv_id') == carry_local_id:
+                c['api_conv_id'] = api_conv_id
+                break
+
+    return jsonify({'success': True, 'new_conv_id': new_conv_id, 'carried': bool(carry_history)})
 
 
 @app.route('/api/reset', methods=['POST'])
