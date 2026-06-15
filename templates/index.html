@@ -5,30 +5,50 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PixelBunny AI</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" id="hljs-light">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" id="hljs-dark" disabled>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 
 :root {
-  --bg: #0d0d0d;
-  --sidebar: #111111;
-  --surface: #1a1a1a;
-  --surface2: #222222;
-  --border: #2a2a2a;
-  --accent: #7c3aed;
-  --accent-dim: rgba(124,58,237,.12);
-  --accent-hover: #6d28d9;
-  --accent-light: #a78bfa;
-  --text: #e5e5e5;
-  --text2: #a1a1aa;
-  --text3: #52525b;
-  --user-bg: #1c1530;
-  --error: #ef4444;
-  --success: #22c55e;
-  --warn: #f59e0b;
+  --bg: #faf9f6;
+  --sidebar: #f4f3ee;
+  --surface: #ffffff;
+  --surface2: #f0eee6;
+  --border: #e6e3da;
+  --accent: #d97757;
+  --accent-dim: rgba(217,119,87,.08);
+  --accent-hover: #c35f3f;
+  --accent-light: #bd5b3a;
+  --text: #2d2a26;
+  --text2: #79746c;
+  --text3: #ada89f;
+  --user-bg: #f1e3d8;
+  --error: #dc2626;
+  --success: #16a34a;
+  --warn: #d97706;
   --sidebar-w: 260px;
+}
+
+[data-theme="dark"] {
+  --bg: #18171a;
+  --sidebar: #1f1e22;
+  --surface: #27262b;
+  --surface2: #2f2e34;
+  --border: #3a3840;
+  --accent: #e0845e;
+  --accent-dim: rgba(224,132,94,.1);
+  --accent-hover: #d06640;
+  --accent-light: #e0845e;
+  --text: #ede9e4;
+  --text2: #9e9891;
+  --text3: #5e5a55;
+  --user-bg: #33271f;
+  --error: #f87171;
+  --success: #4ade80;
+  --warn: #fbbf24;
 }
 
 html,body{height:100%;height:100dvh;overflow:hidden}
@@ -43,17 +63,17 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
 /* ─── SETUP OVERLAY ─── */
 .setup-overlay{
   position:fixed;inset:0;z-index:100;
-  background:radial-gradient(ellipse at 50% 40%, rgba(124,58,237,.15) 0%, var(--bg) 70%);
+  background:radial-gradient(ellipse at 50% 40%, rgba(217,119,87,.15) 0%, var(--bg) 70%);
   display:flex;align-items:center;justify-content:center;padding:20px;
 }
 .setup-card{
   background:var(--surface);border:1px solid var(--border);border-radius:20px;
   padding:48px 40px;max-width:420px;width:100%;text-align:center;
-  box-shadow:0 0 80px rgba(124,58,237,.2),0 40px 80px rgba(0,0,0,.4);
+  box-shadow:0 0 60px rgba(217,119,87,.15),0 30px 60px rgba(0,0,0,.08);
 }
 .setup-logo{
   font-size:56px;margin-bottom:16px;display:block;
-  filter:drop-shadow(0 0 20px rgba(124,58,237,.5));
+  filter:drop-shadow(0 0 20px rgba(217,119,87,.5));
 }
 .setup-card h1{font-size:28px;font-weight:600;letter-spacing:-.5px;margin-bottom:8px}
 .setup-card p{color:var(--text2);font-size:13px;margin-bottom:32px}
@@ -134,17 +154,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
 .sidebar-btn svg{flex-shrink:0;opacity:.7}
 .sidebar-btn:hover svg{opacity:1}
 
-.model-selector{padding:10px 10px 6px}
-.model-select{
-  width:100%;padding:9px 30px 9px 11px;border-radius:8px;
-  background:var(--surface2);border:1px solid var(--border);
-  color:var(--text);font-size:12.5px;font-family:inherit;
-  outline:none;cursor:pointer;transition:border-color .2s;appearance:none;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%2371717a' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
-  background-repeat:no-repeat;background-position:right 10px center;
-}
-.model-select:focus{border-color:var(--accent)}
-.model-select option{background:var(--surface2);color:var(--text)}
+/* (model selector moved to input area) */
 
 /* ─── CONVERSATION LIST ─── */
 .conv-list{
@@ -159,42 +169,81 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
   border-radius:8px;cursor:pointer;transition:background .15s,color .15s;
   font-size:12.5px;color:var(--text2);border:none;background:none;
   font-family:inherit;width:100%;text-align:left;margin-bottom:1px;
+  position:relative;
 }
 .conv-item:hover{background:var(--surface2);color:var(--text)}
-.conv-item.active{background:var(--accent-dim);color:var(--text);border:1px solid rgba(124,58,237,.2)}
+.conv-item.active{background:var(--accent-dim);color:var(--text);border:1px solid rgba(217,119,87,.2)}
 .conv-item.active svg{opacity:.9}
 .conv-item svg{flex-shrink:0;opacity:.5}
 .conv-item:hover svg{opacity:.8}
 .conv-item-title{
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;
 }
+.conv-item-title-input{
+  flex:1;background:var(--bg);border:1px solid var(--accent);
+  border-radius:5px;color:var(--text);font-size:12.5px;
+  font-family:inherit;padding:2px 5px;outline:none;min-width:0;
+}
 .conv-item-count{
   font-size:10px;color:var(--text3);flex-shrink:0;
   background:var(--surface2);padding:1px 5px;border-radius:4px;
 }
+.conv-item-menu-btn{
+  flex-shrink:0;background:none;border:none;color:var(--text3);
+  cursor:pointer;padding:2px 4px;border-radius:5px;
+  display:flex;align-items:center;justify-content:center;opacity:0;
+  transition:opacity .12s,background .12s,color .12s;
+}
+.conv-item:hover .conv-item-menu-btn,
+.conv-item.menu-open .conv-item-menu-btn{opacity:1}
+.conv-item-menu-btn:hover{background:var(--border);color:var(--text)}
+
+.conv-menu{
+  position:absolute;right:0;top:calc(100% + 4px);
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:10px;padding:4px;min-width:160px;z-index:200;
+  box-shadow:0 10px 30px rgba(0,0,0,.15);
+  display:flex;flex-direction:column;gap:2px;
+}
+.conv-menu button{
+  display:flex;align-items:center;gap:8px;padding:7px 9px;
+  border-radius:6px;border:none;background:none;cursor:pointer;
+  font-size:12.5px;color:var(--text2);font-family:inherit;text-align:left;
+  width:100%;transition:background .12s,color .12s;
+}
+.conv-menu button:hover{background:var(--border);color:var(--text)}
+.conv-menu button.danger:hover{background:rgba(239,68,68,.12);color:var(--error)}
+.conv-menu svg{flex-shrink:0;opacity:.8}
 
 .sidebar-account{
   margin:0 10px 10px;padding:10px 12px;
   background:var(--surface2);border-radius:10px;border:1px solid var(--border);
 }
-.account-label{font-size:10px;color:var(--text3);margin-bottom:3px}
-.account-email{font-size:11.5px;color:var(--text2);word-break:break-all;line-height:1.4;margin-bottom:8px}
+.account-label{font-size:10px;color:var(--text3);margin-bottom:5px}
+.account-row{display:flex;align-items:center;gap:8px}
+.account-email{
+  font-size:11.5px;color:var(--text2);line-height:1.4;flex:1;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;
+}
 .account-dot{
   display:inline-block;width:6px;height:6px;border-radius:50%;
   background:var(--success);margin-right:5px;vertical-align:middle;
-  animation:pulse-dot 2s infinite;
+  animation:pulse-dot 2s infinite;flex-shrink:0;
 }
 @keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.4}}
 
 .account-create-btn{
-  display:flex;align-items:center;gap:7px;padding:7px 10px;
-  border-radius:7px;cursor:pointer;transition:background .15s,color .15s;
-  font-size:12px;color:var(--text2);border:1px solid var(--border);
-  background:var(--bg);font-family:inherit;width:100%;text-align:left;
+  display:flex;align-items:center;justify-content:center;
+  width:28px;height:28px;flex-shrink:0;
+  border-radius:7px;cursor:pointer;transition:background .15s,color .15s,border-color .15s;
+  color:var(--text2);border:1px solid var(--border);
+  background:var(--bg);font-family:inherit;
 }
 .account-create-btn:hover{background:var(--accent-dim);border-color:var(--accent);color:var(--text)}
 .account-create-btn:disabled{opacity:.4;cursor:not-allowed}
-.account-create-btn svg{flex-shrink:0;opacity:.7}
+.account-create-btn.spinning{opacity:.7}
+.account-create-btn.spinning svg{animation:spin .8s linear infinite;transform-origin:center}
+@keyframes spin{to{transform:rotate(360deg)}}
 
 .sidebar-spacer{flex:1}
 .sidebar-footer{padding:10px;border-top:1px solid var(--border)}
@@ -235,12 +284,12 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
   display:flex;align-items:center;justify-content:center;
   font-size:16px;margin-top:2px;
 }
-.msg-avatar.user{background:var(--user-bg);border:1px solid rgba(124,58,237,.3)}
-.msg-avatar.ai{background:var(--accent-dim);border:1px solid rgba(124,58,237,.2)}
+.msg-avatar.user{background:var(--user-bg);border:1px solid rgba(217,119,87,.3)}
+.msg-avatar.ai{background:var(--accent-dim);border:1px solid rgba(217,119,87,.2)}
 
 .msg-body{flex:1;min-width:0;padding-top:4px}
 .msg-role{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--text3);margin-bottom:6px}
-.msg-role.user{color:rgba(124,58,237,.7)}
+.msg-role.user{color:rgba(217,119,87,.8)}
 .msg-role.ai{color:var(--text3)}
 
 .msg-text{color:var(--text);line-height:1.7;word-wrap:break-word}
@@ -250,7 +299,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
 .msg-text li{margin-bottom:4px}
 .msg-text h1,.msg-text h2,.msg-text h3{margin:16px 0 8px;font-weight:600;line-height:1.3}
 .msg-text h1{font-size:20px}.msg-text h2{font-size:17px}.msg-text h3{font-size:15px}
-.msg-text strong{font-weight:600;color:#f0f0f0}
+.msg-text strong{font-weight:600;color:var(--text)}
 .msg-text em{font-style:italic;color:var(--text2)}
 .msg-text blockquote{
   border-left:3px solid var(--accent);padding-left:12px;
@@ -262,13 +311,13 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
 
 /* Code */
 .msg-text code{
-  background:rgba(124,58,237,.1);border:1px solid rgba(124,58,237,.2);
+  background:rgba(217,119,87,.1);border:1px solid rgba(217,119,87,.2);
   padding:1px 6px;border-radius:4px;font-size:12.5px;
   font-family:'SF Mono','Fira Code',monospace;color:var(--accent-light);
 }
 .msg-text pre{
   position:relative;margin:12px 0;border-radius:10px;
-  background:#161616 !important;border:1px solid var(--border);
+  background:var(--surface2) !important;border:1px solid var(--border);
   overflow:hidden;
 }
 .msg-text pre code{
@@ -361,7 +410,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
 }
 .input-box:focus-within{
   border-color:var(--accent);
-  box-shadow:0 0 0 3px rgba(124,58,237,.12),0 0 30px rgba(124,58,237,.06);
+  box-shadow:0 0 0 3px rgba(217,119,87,.12),0 0 30px rgba(217,119,87,.06);
 }
 .input-box textarea{
   flex:1;background:none;border:none;outline:none;
@@ -394,16 +443,48 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
 .send-btn:active{transform:scale(.92)}
 .send-btn:disabled{opacity:.3;cursor:not-allowed;transform:none}
 
+/* ─── MODEL PICKER (input area) ─── */
+.model-picker{position:relative;flex-shrink:0}
+.model-picker-btn{
+  display:flex;align-items:center;gap:5px;height:34px;
+  padding:0 10px;border-radius:9px;border:1px solid var(--border);
+  background:none;cursor:pointer;color:var(--text2);
+  font-size:12px;font-family:inherit;white-space:nowrap;
+  transition:background .15s,color .15s,border-color .15s;
+  max-width:130px;overflow:hidden;
+}
+.model-picker-btn span{overflow:hidden;text-overflow:ellipsis}
+.model-picker-btn:hover{background:var(--surface2);color:var(--text);border-color:var(--text3)}
+.model-picker-btn svg.chev{flex-shrink:0;opacity:.6;transition:transform .15s}
+.model-picker.open .model-picker-btn svg.chev{transform:rotate(180deg)}
+
+.model-picker-menu{
+  display:none;position:absolute;bottom:calc(100% + 8px);left:0;
+  background:var(--surface2);border:1px solid var(--border);
+  border-radius:10px;padding:5px;min-width:220px;max-height:320px;
+  overflow-y:auto;z-index:120;box-shadow:0 10px 40px rgba(0,0,0,.12);
+}
+.model-picker.open .model-picker-menu{display:block}
+.model-picker-item{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:8px 10px;border-radius:7px;cursor:pointer;
+  font-size:12.5px;color:var(--text2);transition:background .12s,color .12s;
+}
+.model-picker-item:hover{background:var(--border);color:var(--text)}
+.model-picker-item.active{color:var(--text);background:var(--accent-dim)}
+.model-picker-item svg{flex-shrink:0;color:var(--accent-light);opacity:0}
+.model-picker-item.active svg{opacity:1}
+
 /* ─── MODAL ─── */
 .modal-overlay{
   position:fixed;inset:0;z-index:200;
-  background:rgba(0,0,0,.7);backdrop-filter:blur(4px);
+  background:rgba(0,0,0,.4);backdrop-filter:blur(4px);
   display:flex;align-items:center;justify-content:center;padding:20px;
 }
 .modal{
   background:var(--surface);border:1px solid var(--border);
   border-radius:16px;padding:32px;max-width:400px;width:100%;
-  box-shadow:0 40px 80px rgba(0,0,0,.5);
+  box-shadow:0 30px 60px rgba(0,0,0,.12);
   animation:modal-in .2s ease;
 }
 @keyframes modal-in{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:none}}
@@ -437,7 +518,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
 .toast{
   background:var(--surface);border:1px solid var(--border);border-radius:10px;
   padding:12px 16px;font-size:13px;color:var(--text2);
-  box-shadow:0 10px 30px rgba(0,0,0,.4);max-width:300px;
+  box-shadow:0 10px 30px rgba(0,0,0,.1);max-width:300px;
   animation:toast-in .25s ease;pointer-events:all;
   display:flex;align-items:center;gap:8px;
 }
@@ -448,7 +529,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
 
 /* ─── SIDEBAR OVERLAY (mobile) ─── */
 .sidebar-overlay{
-  display:none;position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.6);
+  display:none;position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.35);
 }
 
 /* ─── RESPONSIVE ─── */
@@ -460,7 +541,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
     min-width:unset;
   }
   .sidebar.open{transform:translateX(0)}
-  .sidebar-overlay{display:none;position:fixed;inset:0;z-index:59;background:rgba(0,0,0,.6)}
+  .sidebar-overlay{display:none;position:fixed;inset:0;z-index:59;background:rgba(0,0,0,.35)}
   .sidebar-overlay.active{display:block}
   .topbar{display:flex}
   .app{flex-direction:column;height:100dvh}
@@ -470,7 +551,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
   }
   .messages{flex:1;min-height:0;padding:12px 0 4px}
   .input-area{
-    padding:8px 12px env(safe-area-inset-bottom, 12px);
+    padding:8px 12px calc(env(safe-area-inset-bottom, 0px) + 18px);
     flex-shrink:0;
   }
   .messages-inner{padding:0 12px}
@@ -508,21 +589,11 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
       <div class="sidebar-title">Pixel<span>Bunny</span></div>
     </div>
 
-    <div class="sidebar-section">Model</div>
-    <div class="model-selector">
-      <select class="model-select" id="modelSelect" onchange="changeModel(this.value)">
-      </select>
-    </div>
-
     <div class="sidebar-section">Sohbet</div>
     <div style="padding:0 10px">
       <button class="sidebar-btn" onclick="newChat()">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Yeni Sohbet
-      </button>
-      <button class="sidebar-btn" onclick="showResetModal()">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.96-5.07"/></svg>
-        Hesabı Sıfırla
       </button>
     </div>
 
@@ -535,19 +606,25 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
 
     <div class="sidebar-account" id="accountBox">
       <div class="account-label">Aktif Hesap</div>
-      <div class="account-email" id="accountEmail">
-        <span class="account-dot"></span>Yükleniyor...
+      <div class="account-row">
+        <div class="account-email" id="accountEmail">
+          <span class="account-dot"></span>Yükleniyor...
+        </div>
+        <button class="account-create-btn" id="createAccountBtn" onclick="quickCreateAccount()" title="Yeni Hesap Oluştur">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
       </div>
-      <button class="account-create-btn" id="createAccountBtn" onclick="quickCreateAccount()">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        Yeni Hesap Oluştur
-      </button>
     </div>
 
     <div class="sidebar-footer">
-      <button class="sidebar-btn danger" onclick="clearHistory()">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-        Geçmişi Temizle
+      <button class="sidebar-btn" id="themeToggleBtn" onclick="toggleTheme()">
+        <svg id="themeIconMoon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <svg id="themeIconSun" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <span id="themeLabel">Karanlık Mod</span>
+      </button>
+      <button class="sidebar-btn" onclick="logout()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        Çıkış Yap
       </button>
     </div>
   </aside>
@@ -584,6 +661,13 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
           <textarea id="msgInput" placeholder="Mesajınızı yazın..."
             onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
           <div class="input-actions">
+            <div class="model-picker" id="modelPicker">
+              <button class="model-picker-btn" onclick="toggleModelPicker(event)" title="Model seç">
+                <span id="modelPickerLabel">Model</span>
+                <svg class="chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+              </button>
+              <div class="model-picker-menu" id="modelPickerMenu"></div>
+            </div>
             <input type="file" id="fileInput" accept="image/*" style="display:none" multiple onchange="handleFiles(this)">
             <button class="icon-btn" title="Resim ekle" onclick="document.getElementById('fileInput').click()" id="attachBtn">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
@@ -596,23 +680,6 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
       </div>
     </div>
   </main>
-</div>
-
-<!-- RESET MODAL -->
-<div class="modal-overlay" id="resetModal" style="display:none">
-  <div class="modal">
-    <span class="modal-icon">🔄</span>
-    <h2>Hesabı Sıfırla</h2>
-    <p>Kredi sınırına ulaşıldığında veya yeni bir hesap açmak istediğinizde kullanın. Otomatik olarak geçici e-posta ile yeni hesap oluşturulur.</p>
-    <label class="modal-check">
-      <input type="checkbox" id="carryCheck" checked>
-      Mevcut sohbet geçmişini yeni hesaba taşı
-    </label>
-    <div class="modal-btns">
-      <button class="btn-secondary" onclick="closeModal('resetModal')">Vazgeç</button>
-      <button class="btn-primary" id="resetBtn" onclick="resetSession()">Sıfırla</button>
-    </div>
-  </div>
 </div>
 
 <!-- CREDIT ERROR MODAL -->
@@ -641,6 +708,7 @@ const S = {
   models: [],
   model: '',
   email: '',
+  accountCreated: false,
   msgCount: 0,
   pendingAtts: [],   // [{url, type, name}]
   streaming: false,
@@ -678,7 +746,6 @@ async function boot() {
   // Load models
   const mr = await fetch('/api/models').then(r=>r.json());
   S.models = mr.models || [];
-  populateSelects();
 
   // Init textarea height
   const ta = document.getElementById('msgInput');
@@ -690,31 +757,61 @@ async function boot() {
     S.email = st.email;
     S.model = st.model;
     S.msgCount = st.message_count;
+    S.accountCreated = !!st.account_created;
     enterApp();
     updateSidebar();
-    await refreshConversations();
 
-    // Restore conversation from URL if present
-    const urlConvId = getUrlConvId();
-    if (urlConvId) {
-      await loadConversationById(urlConvId);
+    if (S.accountCreated) {
+      await refreshConversations();
+      // Restore conversation from URL if present
+      const urlConvId = getUrlConvId();
+      if (urlConvId) {
+        await loadConversationById(urlConvId);
+      } else {
+        await loadHistory();
+      }
     } else {
-      await loadHistory();
+      clearMessages();
     }
   } else {
     document.getElementById('setupOverlay').style.display = 'flex';
   }
 }
 
-function populateSelects() {
-  const el = document.getElementById('modelSelect');
-  el.innerHTML = '';
-  S.models.forEach(m => {
-    const opt = document.createElement('option');
-    opt.value = m; opt.textContent = m;
-    el.appendChild(opt);
-  });
+// ─── MODEL PICKER (input area) ─────────────────────────────────────────
+function modelLabel(id) {
+  const m = S.models.find(x => x.id === id);
+  return m ? m.label : id;
 }
+
+function renderModelPicker() {
+  document.getElementById('modelPickerLabel').textContent = modelLabel(S.model) || 'Model';
+  const menu = document.getElementById('modelPickerMenu');
+  menu.innerHTML = S.models.map(m => `
+    <div class="model-picker-item${m.id === S.model ? ' active' : ''}" onclick="selectModel('${escHtml(m.id)}')">
+      <span>${escHtml(m.label)}</span>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+    </div>
+  `).join('');
+}
+
+function toggleModelPicker(e) {
+  e.stopPropagation();
+  document.getElementById('modelPicker').classList.toggle('open');
+}
+
+async function selectModel(id) {
+  document.getElementById('modelPicker').classList.remove('open');
+  if (id === S.model) return;
+  await changeModel(id);
+}
+
+document.addEventListener('click', (e) => {
+  const picker = document.getElementById('modelPicker');
+  if (picker && !picker.contains(e.target)) picker.classList.remove('open');
+  document.querySelectorAll('.conv-menu').forEach(m => m.remove());
+  document.querySelectorAll('.conv-item.menu-open').forEach(i => i.classList.remove('menu-open'));
+});
 
 // ─── SESSION INIT ──────────────────────────────────────────────────────
 async function initSession() {
@@ -729,7 +826,8 @@ async function initSession() {
   }
 
   btn.disabled = true;
-  showSetupLoading(status);
+  status.className = 'setup-status';
+  status.innerHTML = `<div class="dot-anim"><span></span><span></span><span></span></div> Giriş yapılıyor...`;
 
   try {
     const r = await fetch('/api/init', {
@@ -739,47 +837,23 @@ async function initSession() {
     const d = await r.json();
 
     if (d.success) {
-      S.email = d.email;
+      S.email = '';
       S.model = d.model;
       S.msgCount = 0;
-      hideSetupLoading();
+      S.accountCreated = !!d.account_created;
       enterApp();
       updateSidebar();
-      await refreshConversations();
-      toast('Hesap oluşturuldu ✓', 'success');
+      clearMessages();
     } else {
-      hideSetupLoading();
       status.className = 'setup-status error';
       status.textContent = d.error || 'Bir hata oluştu.';
       btn.disabled = false;
     }
   } catch(e) {
-    hideSetupLoading();
     status.className = 'setup-status error';
     status.textContent = 'Bağlantı hatası: ' + e.message;
     btn.disabled = false;
   }
-}
-
-let _loadingInterval;
-function showSetupLoading(el) {
-  const msgs = [
-    'Geçici e-posta oluşturuluyor...',
-    'Hesap kaydediliyor...',
-    'Onay maili bekleniyor...',
-    'Hesap doğrulanıyor...',
-    'Oturum başlatılıyor...'
-  ];
-  let i = 0;
-  el.className = 'setup-status';
-  el.innerHTML = `<div class="dot-anim"><span></span><span></span><span></span></div> ${msgs[0]}`;
-  _loadingInterval = setInterval(() => {
-    i = (i+1) % msgs.length;
-    el.innerHTML = `<div class="dot-anim"><span></span><span></span><span></span></div> ${msgs[i]}`;
-  }, 5000);
-}
-function hideSetupLoading() {
-  clearInterval(_loadingInterval);
 }
 
 function enterApp() {
@@ -789,10 +863,24 @@ function enterApp() {
 }
 
 function updateSidebar() {
-  document.getElementById('accountEmail').innerHTML =
-    `<span class="account-dot"></span>${S.email}`;
-  document.getElementById('topbarModel').textContent = S.model;
-  document.getElementById('modelSelect').value = S.model;
+  if (S.accountCreated) {
+    document.getElementById('accountEmail').innerHTML =
+      `<span class="account-dot"></span>${S.email}`;
+  } else {
+    document.getElementById('accountEmail').innerHTML =
+      `<span class="account-dot" style="background:var(--text3);animation:none"></span>Hesap yok`;
+  }
+  document.getElementById('topbarModel').textContent = modelLabel(S.model);
+  renderModelPicker();
+}
+
+// ─── LOGOUT ─────────────────────────────────────────────────────────────
+async function logout() {
+  if (!confirm('Çıkış yapılsın mı?')) return;
+  try {
+    await fetch('/api/logout', {method:'POST'});
+  } catch(e) {}
+  location.reload();
 }
 
 // ─── CONVERSATION LIST ─────────────────────────────────────────────────
@@ -814,12 +902,111 @@ function renderConversationList(convs, activeConvId) {
     const cid = c.conv_id || String(c.idx);
     const isActive = cid === activeConvId || String(c.idx) === activeConvId;
     return `
-    <button class="conv-item${isActive ? ' active' : ''}" onclick="loadConversationById('${escHtml(cid)}')">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-      <span class="conv-item-title">${escHtml(c.title)}</span>
-      <span class="conv-item-count">${c.count}</span>
-    </button>
+    <div class="conv-item${isActive ? ' active' : ''}" data-conv-id="${escHtml(cid)}">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" onclick="loadConversationById('${escHtml(cid)}')"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+      <span class="conv-item-title" onclick="loadConversationById('${escHtml(cid)}')">${escHtml(c.title)}</span>
+      <span class="conv-item-count" onclick="loadConversationById('${escHtml(cid)}')">${c.count}</span>
+      <button class="conv-item-menu-btn" onclick="toggleConvMenu(event, '${escHtml(cid)}')" title="Seçenekler">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+      </button>
+    </div>
   `}).join('');
+}
+
+function toggleConvMenu(e, convId) {
+  e.stopPropagation();
+  const item = e.currentTarget.closest('.conv-item');
+  const wasOpen = item.classList.contains('menu-open');
+
+  document.querySelectorAll('.conv-menu').forEach(m => m.remove());
+  document.querySelectorAll('.conv-item.menu-open').forEach(i => i.classList.remove('menu-open'));
+
+  if (wasOpen) return;
+
+  item.classList.add('menu-open');
+  const menu = document.createElement('div');
+  menu.className = 'conv-menu';
+  menu.innerHTML = `
+    <button onclick="startRenameConv(event, '${escHtml(convId)}')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      Yeniden Adlandır
+    </button>
+    <button class="danger" onclick="deleteConv(event, '${escHtml(convId)}')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+      Sil
+    </button>
+  `;
+  item.appendChild(menu);
+}
+
+function startRenameConv(e, convId) {
+  e.stopPropagation();
+  document.querySelectorAll('.conv-menu').forEach(m => m.remove());
+
+  const item = document.querySelector(`.conv-item[data-conv-id="${convId}"]`);
+  if (!item) return;
+  item.classList.remove('menu-open');
+
+  const titleEl = item.querySelector('.conv-item-title');
+  const current = titleEl.textContent;
+  const input = document.createElement('input');
+  input.className = 'conv-item-title-input';
+  input.value = current;
+  titleEl.replaceWith(input);
+  input.focus();
+  input.select();
+  input.addEventListener('click', ev => ev.stopPropagation());
+
+  let finished = false;
+  const finish = async (save) => {
+    if (finished) return;
+    finished = true;
+    const val = input.value.trim();
+    if (save && val && val !== current) {
+      try {
+        const r = await fetch('/api/conversation/rename', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({conv_id: convId, title: val})
+        });
+        const d = await r.json();
+        if (!d.success) toast(d.error || 'Yeniden adlandırılamadı', 'error');
+      } catch(err) { toast('Bağlantı hatası', 'error'); }
+    }
+    await refreshConversations();
+  };
+
+  input.addEventListener('keydown', ev => {
+    if (ev.key === 'Enter') { ev.preventDefault(); finish(true); }
+    else if (ev.key === 'Escape') { ev.preventDefault(); finish(false); }
+  });
+  input.addEventListener('blur', () => finish(true));
+}
+
+async function deleteConv(e, convId) {
+  e.stopPropagation();
+  document.querySelectorAll('.conv-menu').forEach(m => m.remove());
+  if (!confirm('Bu konuşma silinsin mi?')) return;
+
+  try {
+    const r = await fetch('/api/conversation/delete', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({conv_id: convId})
+    });
+    const d = await r.json();
+    if (d.success) {
+      if (S.activeConvId === convId) {
+        S.activeConvId = null;
+        S.activeConvIdx = null;
+        setUrlConvId(null);
+        clearMessages();
+      }
+      await refreshConversations();
+    } else {
+      toast(d.error || 'Silinemedi', 'error');
+    }
+  } catch(err) {
+    toast('Bağlantı hatası', 'error');
+  }
 }
 
 async function loadConversationById(convId) {
@@ -882,6 +1069,11 @@ async function sendMessage() {
   const input = document.getElementById('msgInput');
   const msg = input.value.trim();
   if (!msg || S.streaming) return;
+
+  if (!S.accountCreated) {
+    toast('Önce sol alttan bir hesap oluşturun', 'warn');
+    return;
+  }
 
   input.value = '';
   autoResize(input);
@@ -1106,10 +1298,8 @@ async function changeModel(model) {
     const d = await r.json();
     if (d.success) {
       S.model = model;
-      S.msgCount = 0;
       updateSidebar();
-      clearMessages();
-      toast(`Model: ${model}`, 'success');
+      toast(`Model: ${modelLabel(model)}`, 'success');
     }
   } catch(e) {
     toast('Model değiştirilemedi', 'error');
@@ -1139,19 +1329,6 @@ async function newChat() {
   closeSidebar();
 }
 
-async function clearHistory() {
-  if (!confirm('Sohbet geçmişi silinsin mi?')) return;
-  await fetch('/api/clear', {method:'POST'});
-  S.msgCount = 0;
-  S.activeConvIdx = null;
-  S.activeConvId = null;
-  setUrlConvId(null);
-  updateSidebar();
-  clearMessages();
-  await refreshConversations();
-  closeSidebar();
-}
-
 function clearMessages() {
   document.getElementById('messagesInner').innerHTML = `
     <div class="empty-state" id="emptyState">
@@ -1161,17 +1338,7 @@ function clearMessages() {
     </div>`;
 }
 
-// ─── RESET ────────────────────────────────────────────────────────────
-function showResetModal() {
-  showModal('resetModal');
-  closeSidebar();
-}
-
-async function resetSession() {
-  const carry = document.getElementById('carryCheck').checked;
-  await doReset(carry, 'resetModal', 'resetBtn');
-}
-
+// ─── RESET (kredi tükendiğinde) ────────────────────────────────────────
 function showCreditModal() {
   showModal('creditModal');
 }
@@ -1207,6 +1374,7 @@ async function doReset(carry, modalId, btnId) {
     if (d.success) {
       S.email = d.email;
       S.model = d.model || S.model;
+      S.accountCreated = true;
       S.msgCount = 0;
       closeModal(modalId);
       updateSidebar();
@@ -1235,7 +1403,7 @@ async function doReset(carry, modalId, btnId) {
     toast('Bağlantı hatası: ' + e.message, 'error');
   } finally {
     btn.disabled = false;
-    btn.textContent = modalId === 'creditModal' ? 'Yeni Hesap Aç' : 'Sıfırla';
+    btn.textContent = 'Yeni Hesap Aç';
   }
 }
 
@@ -1243,23 +1411,24 @@ async function doReset(carry, modalId, btnId) {
 async function quickCreateAccount() {
   const btn = document.getElementById('createAccountBtn');
   btn.disabled = true;
-  btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Oluşturuluyor...`;
+  btn.classList.add('spinning');
+  const originalIcon = btn.innerHTML;
+  btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>`;
 
   try {
     const r = await fetch('/api/reset', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({carry_history: false, conv_id: null})
+      body: JSON.stringify({carry_history: true, conv_id: S.activeConvId || null})
     });
     const d = await r.json();
     if (d.success) {
       S.email = d.email;
       S.model = d.model || S.model;
-      S.msgCount = 0;
-      S.activeConvId = null;
-      S.activeConvIdx = null;
-      setUrlConvId(null);
+      S.accountCreated = true;
+      // Aktif konuşma penceresi olduğu yerde kalır — ekran temizlenmez,
+      // başka bir konuşmaya geçilmez. Sunucu mevcut konuşmanın geçmişini
+      // arka planda yeni hesaba taşıdı.
       updateSidebar();
-      clearMessages();
       await refreshConversations();
       toast(`Yeni hesap oluşturuldu ✓`, 'success');
     } else {
@@ -1269,7 +1438,8 @@ async function quickCreateAccount() {
     toast('Bağlantı hatası', 'error');
   } finally {
     btn.disabled = false;
-    btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Yeni Hesap Oluştur`;
+    btn.classList.remove('spinning');
+    btn.innerHTML = originalIcon;
   }
 }
 
@@ -1277,7 +1447,7 @@ async function quickCreateAccount() {
 function showModal(id) { document.getElementById(id).style.display = 'flex'; }
 function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') {
-  closeModal('resetModal'); closeModal('creditModal');
+  closeModal('creditModal');
 }});
 
 // ─── SIDEBAR (mobile) ─────────────────────────────────────────────────
@@ -1324,6 +1494,29 @@ marked.setOptions({
   breaks: true,
   gfm: true,
 });
+
+// ─── THEME ────────────────────────────────────────────────────────────
+function applyTheme(dark) {
+  document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+  document.getElementById('themeIconMoon').style.display = dark ? 'none' : '';
+  document.getElementById('themeIconSun').style.display = dark ? '' : 'none';
+  document.getElementById('themeLabel').textContent = dark ? 'Aydınlık Mod' : 'Karanlık Mod';
+  document.getElementById('hljs-light').disabled = dark;
+  document.getElementById('hljs-dark').disabled = !dark;
+  localStorage.setItem('pb-theme', dark ? 'dark' : 'light');
+}
+
+function toggleTheme() {
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  applyTheme(!isDark);
+}
+
+// Apply saved theme on load
+(function() {
+  const saved = localStorage.getItem('pb-theme');
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  applyTheme(saved ? saved === 'dark' : prefersDark);
+})();
 
 // ─── BOOT ─────────────────────────────────────────────────────────────
 boot();
