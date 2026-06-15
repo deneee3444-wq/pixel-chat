@@ -219,6 +219,40 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
   margin:0 10px 10px;padding:10px 12px;
   background:var(--surface2);border-radius:10px;border:1px solid var(--border);
 }
+/* ─── AUTO MODE SWITCH ─── */
+.auto-mode-row{
+  display:flex;align-items:center;justify-content:space-between;
+  margin-top:8px;padding-top:8px;border-top:1px solid var(--border);
+}
+.auto-mode-label{font-size:11px;color:var(--text3);}
+.switch{
+  position:relative;display:inline-block;width:34px;height:18px;flex-shrink:0;
+}
+.switch input{opacity:0;width:0;height:0}
+.switch .slider{
+  position:absolute;cursor:pointer;inset:0;
+  background:var(--border);border-radius:18px;transition:.2s;
+}
+.switch .slider:before{
+  position:absolute;content:"";height:12px;width:12px;
+  left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.2s;
+}
+.switch input:checked + .slider{background:var(--accent)}
+.switch input:checked + .slider:before{transform:translateX(16px)}
+
+/* ─── USE IN PROMPT ARROW ─── */
+.msg-use-btn{
+  display:none;align-items:center;justify-content:center;
+  position:absolute;top:4px;right:0;
+  width:24px;height:24px;border-radius:6px;border:none;
+  background:var(--surface2);color:var(--text3);cursor:pointer;
+  font-size:13px;transition:background .15s,color .15s;
+  opacity:.7;
+}
+.msg:hover .msg-use-btn{display:flex}
+.msg-use-btn:hover{background:var(--accent-dim);color:var(--accent);opacity:1}
+.msg-body{position:relative}
+
 .account-label{font-size:10px;color:var(--text3);margin-bottom:5px}
 .account-row{display:flex;align-items:center;gap:8px}
 .account-email{
@@ -287,12 +321,12 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
 .msg-avatar.user{background:var(--user-bg);border:1px solid rgba(217,119,87,.3)}
 .msg-avatar.ai{background:var(--accent-dim);border:1px solid rgba(217,119,87,.2)}
 
-.msg-body{flex:1;min-width:0;padding-top:4px}
+.msg-body{flex:1;min-width:0;padding-top:4px;overflow:hidden}
 .msg-role{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--text3);margin-bottom:6px}
 .msg-role.user{color:rgba(217,119,87,.8)}
 .msg-role.ai{color:var(--text3)}
 
-.msg-text{color:var(--text);line-height:1.7;word-wrap:break-word}
+.msg-text{color:var(--text);line-height:1.7;word-wrap:break-word;overflow-wrap:break-word;min-width:0}
 .msg-text p{margin-bottom:12px}
 .msg-text p:last-child{margin-bottom:0}
 .msg-text ul,.msg-text ol{margin:8px 0 12px 18px}
@@ -308,6 +342,17 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
 .msg-text a{color:var(--accent-light);text-decoration:none}
 .msg-text a:hover{text-decoration:underline}
 .msg-text hr{border:none;border-top:1px solid var(--border);margin:16px 0}
+.msg-text table{border-collapse:collapse;font-size:13px;margin:0}
+.msg-text table th,.msg-text table td{border:1px solid var(--border);padding:7px 12px;text-align:left;white-space:nowrap}
+.msg-text table th{background:var(--surface2);font-weight:600}
+.msg-text table tr:nth-child(even) td{background:var(--accent-dim)}
+.table-wrap{overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:touch;margin:12px 0;border-radius:8px;border:1px solid var(--border)}
+.table-wrap table{margin:0;border:none;width:max-content;min-width:100%}
+.table-wrap table th,.table-wrap table td{border-color:var(--border)}
+.table-wrap table th:first-child,.table-wrap table td:first-child{border-left:none}
+.table-wrap table th:last-child,.table-wrap table td:last-child{border-right:none}
+.table-wrap table tr:first-child th,.table-wrap table tr:first-child td{border-top:none}
+.table-wrap table tr:last-child th,.table-wrap table tr:last-child td{border-bottom:none}
 
 /* Code */
 .msg-text code{
@@ -613,6 +658,13 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
         <button class="account-create-btn" id="createAccountBtn" onclick="quickCreateAccount()" title="Yeni Hesap Oluştur">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         </button>
+      </div>
+      <div class="auto-mode-row">
+        <span class="auto-mode-label">🤖 Otomatik Mod</span>
+        <label class="switch">
+          <input type="checkbox" id="autoModeToggle" onchange="saveAutoMode()">
+          <span class="slider"></span>
+        </label>
       </div>
     </div>
 
@@ -1103,6 +1155,9 @@ async function sendMessage() {
       const err = await resp.json();
       textNode.textContent = err.error || 'Hata oluştu.';
       textNode.style.color = 'var(--error)';
+      // Restore message to prompt
+      document.getElementById('msgInput').value = msg;
+      autoResize(document.getElementById('msgInput'));
       return;
     }
 
@@ -1144,11 +1199,37 @@ async function sendMessage() {
             // Refresh conv list to show new/updated conversation
             await refreshConversations();
           } else if (d.type === 'error') {
-            if (d.code === 'INSUFFICIENT_CREDITS') {
+            if (d.code === 'LOCKED') {
+              // 423 - Konuşma kilitlendi
+              aiEl.remove();
+              if (isAutoMode()) {
+                addSystemLog(`⚠️ 423 Locked — Arkaplanda yeni konuşma açılıyor...`);
+                await doAutoNewChatBackground(msg, atts);
+              } else {
+                addSystemLogWithAction(
+                  '⚠️ 423 Locked — Bu konuşma kilitlendi.',
+                  'Yeni Sohbet Başlat',
+                  async () => { await doNewChatBackground(msg, atts); }
+                );
+                restorePrompt(msg);
+              }
+            } else if (d.code === 'INSUFFICIENT_CREDITS') {
+              // 402 - Kredi tükendi
               renderMarkdown(textNode, full || '', false);
-              showCreditModal();
+              if (isAutoMode()) {
+                addSystemLog(`⚠️ 402 Kredi tükendi — Arkaplanda yeni hesap açılıyor...`);
+                await doAutoNewAccount(msg, atts);
+              } else {
+                addSystemLogWithAction(
+                  '⚠️ 402 Kredi tükendi.',
+                  'Yeni Hesap Aç',
+                  async () => { await doManualNewAccount(msg, atts); }
+                );
+                restorePrompt(msg);
+              }
             } else {
               textNode.innerHTML = `<span style="color:var(--error)">Hata: ${d.code}</span>`;
+              restorePrompt(msg);
             }
           }
         } catch {}
@@ -1197,6 +1278,9 @@ function appendMessage(role, text, images=[], streaming=false) {
       <div class="msg-role ${roleClass}">${roleLabel}</div>
       <div class="msg-text"></div>
       ${imgsHtml}
+      <button class="msg-use-btn" title="Prompt'a aktar" onclick="useInPrompt(this)">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 10 20 15 15 20"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/></svg>
+      </button>
     </div>
   `;
 
@@ -1215,6 +1299,15 @@ function renderMarkdown(el, text, streaming=false) {
   }
   const rendered = marked.parse(text || '');
   el.innerHTML = rendered + (streaming ? '<span class="stream-cursor"></span>' : '');
+  // Wrap tables for horizontal scroll on mobile
+  el.querySelectorAll('table').forEach(table => {
+    if (!table.closest('.table-wrap')) {
+      const wrap = document.createElement('div');
+      wrap.className = 'table-wrap';
+      table.parentNode.insertBefore(wrap, table);
+      wrap.appendChild(table);
+    }
+  });
   el.querySelectorAll('pre code').forEach(block => {
     hljs.highlightElement(block);
     const pre = block.parentElement;
@@ -1450,7 +1543,8 @@ function toast(msg, type='') {
   const el = document.createElement('div');
   el.className = 'toast ' + type;
   const icons = {success:'✓', error:'✕', warn:'⚠'};
-  el.innerHTML = (icons[type] ? `<strong>${icons[type]}</strong>` : '') + msg;
+  const prefix = icons[type] ? `<strong>${icons[type]}</strong> ` : '';
+  el.innerHTML = prefix + msg.replace(/\s*✓\s*/g, '').replace(/\s*✕\s*/g, '');
   wrap.appendChild(el);
   setTimeout(()=>{ el.style.opacity='0'; el.style.transform='translateX(20px)'; el.style.transition='all .3s';
     setTimeout(()=>el.remove(), 300); }, 3000);
@@ -1501,6 +1595,225 @@ function toggleTheme() {
   const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
   applyTheme(saved ? saved === 'dark' : prefersDark);
 })();
+
+// ─── AUTO MODE ────────────────────────────────────────────────────────
+function isAutoMode() {
+  return document.getElementById('autoModeToggle').checked;
+}
+
+function saveAutoMode() {
+  localStorage.setItem('pb-auto-mode', isAutoMode() ? '1' : '0');
+}
+
+(function() {
+  const saved = localStorage.getItem('pb-auto-mode');
+  if (saved === '1') {
+    document.getElementById('autoModeToggle').checked = true;
+  }
+})();
+
+// ─── SYSTEM LOG (chat alanında bilgi mesajı) ──────────────────────────
+function addSystemLog(text) {
+  hideEmpty();
+  const inner = document.getElementById('messagesInner');
+  const el = document.createElement('div');
+  el.style.cssText = 'text-align:center;padding:6px 16px;font-size:12px;color:var(--text3);margin:4px auto;background:var(--surface2);border-radius:8px;max-width:760px;';
+  el.textContent = text;
+  inner.appendChild(el);
+  scrollBottom();
+}
+
+function addSystemLogWithAction(text, btnLabel, onClick) {
+  hideEmpty();
+  const inner = document.getElementById('messagesInner');
+  const el = document.createElement('div');
+  el.style.cssText = 'text-align:center;padding:7px 16px;font-size:12px;color:var(--text3);margin:4px auto;background:var(--surface2);border-radius:8px;max-width:760px;display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;';
+  const span = document.createElement('span');
+  span.textContent = text;
+  const btn = document.createElement('button');
+  btn.textContent = btnLabel;
+  btn.style.cssText = 'padding:4px 12px;border-radius:6px;border:1px solid var(--accent);background:var(--accent-dim);color:var(--accent-light);font-size:11.5px;cursor:pointer;font-family:inherit;white-space:nowrap;transition:background .15s;';
+  btn.onmouseenter = () => { if (!btn.disabled) { btn.style.background = 'var(--accent)'; btn.style.color = '#fff'; } };
+  btn.onmouseleave = () => { if (!btn.disabled) { btn.style.background = 'var(--accent-dim)'; btn.style.color = 'var(--accent-light)'; } };
+  btn.onclick = async () => {
+    btn.disabled = true;
+    btn.textContent = '⏳ İşleniyor...';
+    btn.style.cursor = 'default';
+    try {
+      await onClick();
+      btn.textContent = '✓ Tamamlandı';
+      btn.style.cssText = 'padding:4px 12px;border-radius:6px;border:1px solid var(--success);background:transparent;color:var(--success);font-size:11.5px;cursor:default;font-family:inherit;white-space:nowrap;opacity:.7;';
+    } catch {
+      btn.textContent = '✕ Hata oluştu';
+      btn.style.cssText = 'padding:4px 12px;border-radius:6px;border:1px solid var(--error);background:transparent;color:var(--error);font-size:11.5px;cursor:default;font-family:inherit;white-space:nowrap;opacity:.7;';
+    }
+  };
+  el.appendChild(span);
+  el.appendChild(btn);
+  inner.appendChild(el);
+  scrollBottom();
+}
+
+// ─── RESTORE PROMPT ───────────────────────────────────────────────────
+function restorePrompt(msg) {
+  const input = document.getElementById('msgInput');
+  if (msg && !input.value.trim()) {
+    input.value = msg;
+    autoResize(input);
+    input.focus();
+  }
+}
+
+// ─── USE IN PROMPT ────────────────────────────────────────────────────
+function useInPrompt(btn) {
+  const msgBody = btn.closest('.msg-body');
+  const textEl = msgBody.querySelector('.msg-text');
+  const text = textEl ? (textEl.innerText || textEl.textContent || '').trim() : '';
+  if (!text) return;
+  const input = document.getElementById('msgInput');
+  input.value = text;
+  autoResize(input);
+  input.focus();
+}
+
+// ─── NEW CHAT BACKGROUND (423 - manuel mod) ──────────────────────────
+// Arkaplanda yeni konuşma açar, mevcut chat sayfasında kal
+async function doNewChatBackground(pendingMsg, pendingAtts) {
+  try {
+    const r = await fetch('/api/new_chat', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({carry_history: true, conv_id: S.activeConvId || null})
+    });
+    const d = await r.json();
+    if (!d.success) throw new Error(d.error || 'Hata');
+    S.msgCount = 0;
+    S.activeConvIdx = null;
+    S.activeConvId = d.new_conv_id || null;
+    if (S.activeConvId) setUrlConvId(S.activeConvId);
+    else setUrlConvId(null);
+    await refreshConversations();
+    addSystemLog('✓ Yeni konuşma hazır — mesajınızı göndermek için butona basın.');
+    S.pendingAtts = pendingAtts || [];
+    renderAttachPreview();
+    S.streaming = false;
+    setSendDisabled(false);
+    restorePrompt(pendingMsg);
+  } catch(e) {
+    addSystemLog('Yeni konuşma başlatılamadı: ' + e.message);
+    restorePrompt(pendingMsg);
+    throw e;
+  }
+}
+
+// ─── AUTO NEW CHAT BACKGROUND (423 - oto mod) ────────────────────────
+// Oto modda arkaplanda yeni konuşma, mevcut sayfada kal
+async function doAutoNewChatBackground(pendingMsg, pendingAtts) {
+  try {
+    addSystemLog('⏳ Yeni konuşma oluşturuluyor...');
+    const r = await fetch('/api/new_chat', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({carry_history: true, conv_id: S.activeConvId || null})
+    });
+    const d = await r.json();
+    if (!d.success) throw new Error(d.error || 'Hata');
+    S.msgCount = 0;
+    S.activeConvIdx = null;
+    S.activeConvId = d.new_conv_id || null;
+    if (S.activeConvId) setUrlConvId(S.activeConvId);
+    else setUrlConvId(null);
+    await refreshConversations();
+
+    // Ekranı yenile: backend taşınan history ile güncellendi, UI senkronize et
+    await loadHistory();
+
+    // History yüklendikten SONRA logları yaz (loadHistory ekranı temizlediği için)
+    addSystemLog('⚠️ 423 Locked — Bu konuşma kilitlendi.');
+    addSystemLog('⏳ Yeni konuşma oluşturuluyor...');
+    addSystemLog('✓ Yeni konuşma açıldı — geçmiş taşındı.');
+    addSystemLog('✓ Mesajınız yeniden gönderiliyor...');
+
+    // Prompt ve ekleri geri yükle
+    const input = document.getElementById('msgInput');
+    input.value = pendingMsg;
+    autoResize(input);
+    S.pendingAtts = pendingAtts || [];
+    renderAttachPreview();
+    S.streaming = false;
+    setSendDisabled(false);
+    await sendMessage();
+  } catch(e) {
+    addSystemLog('Yeni konuşma başlatılamadı: ' + e.message);
+    restorePrompt(pendingMsg);
+  }
+}
+
+// ─── MANUAL NEW ACCOUNT (402 - normal mod) ────────────────────────────
+// Yeni hesap aç, mesajı prompt'a geri koy — otomatik gönderme
+async function doManualNewAccount(pendingMsg, pendingAtts) {
+  try {
+    addSystemLog('⏳ Yeni hesap oluşturuluyor...');
+    const r = await fetch('/api/reset', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({carry_history: true, conv_id: S.activeConvId || null})
+    });
+    const d = await r.json();
+    if (d.success) {
+      S.email = d.email;
+      S.model = d.model || S.model;
+      S.accountCreated = true;
+      if (d.new_conv_id) S.activeConvId = d.new_conv_id;
+      updateSidebar();
+      await refreshConversations();
+      addSystemLog(`✓ Yeni hesap: ${d.email} — mesajınızı göndermek için butona basın.`);
+      S.pendingAtts = pendingAtts || [];
+      renderAttachPreview();
+      S.streaming = false;
+      setSendDisabled(false);
+      restorePrompt(pendingMsg);
+    } else {
+      addSystemLog('Yeni hesap oluşturulamadı: ' + (d.error || 'bilinmeyen hata'));
+      restorePrompt(pendingMsg);
+    }
+  } catch(e) {
+    addSystemLog('Hesap değişimi başarısız: ' + e.message);
+    restorePrompt(pendingMsg);
+  }
+}
+
+// ─── AUTO NEW ACCOUNT (402) ───────────────────────────────────────────
+// Yeni hesap aç, mevcut chat sayfasında kal, mesajı yeniden gönder
+async function doAutoNewAccount(pendingMsg, pendingAtts) {
+  try {
+    addSystemLog('⏳ Yeni hesap oluşturuluyor...');
+    const r = await fetch('/api/reset', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({carry_history: true, conv_id: S.activeConvId || null})
+    });
+    const d = await r.json();
+    if (d.success) {
+      S.email = d.email;
+      S.model = d.model || S.model;
+      S.accountCreated = true;
+      if (d.new_conv_id) S.activeConvId = d.new_conv_id;
+      updateSidebar();
+      await refreshConversations();
+      addSystemLog(`✓ Yeni hesap: ${d.email} — mesajınız yeniden gönderiliyor...`);
+      const input = document.getElementById('msgInput');
+      input.value = pendingMsg;
+      S.pendingAtts = pendingAtts || [];
+      renderAttachPreview();
+      S.streaming = false;
+      setSendDisabled(false);
+      await sendMessage();
+    } else {
+      addSystemLog('Yeni hesap oluşturulamadı: ' + (d.error || 'bilinmeyen hata'));
+      restorePrompt(pendingMsg);
+    }
+  } catch(e) {
+    addSystemLog('Otomatik hesap değişimi başarısız: ' + e.message);
+    restorePrompt(pendingMsg);
+  }
+}
 
 // ─── BOOT ─────────────────────────────────────────────────────────────
 boot();
