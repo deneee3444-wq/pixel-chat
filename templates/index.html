@@ -687,11 +687,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
   <div class="modal">
     <span class="modal-icon">⚠️</span>
     <h2>Kredi Tükendi</h2>
-    <p>Bu hesabın kredisi bitti. Yeni bir geçici hesap oluşturarak devam edebilirsiniz.</p>
-    <label class="modal-check">
-      <input type="checkbox" id="creditCarryCheck" checked>
-      Sohbet geçmişini yeni hesaba taşı
-    </label>
+    <p>Bu hesabın kredisi bitti. Sohbet geçmişiniz taşınarak yeni hesap oluşturulacak.</p>
     <div class="modal-btns">
       <button class="btn-secondary" onclick="closeModal('creditModal')">Kapat</button>
       <button class="btn-primary" id="creditResetBtn" onclick="resetFromCredit()">Yeni Hesap Aç</button>
@@ -710,10 +706,10 @@ const S = {
   email: '',
   accountCreated: false,
   msgCount: 0,
-  pendingAtts: [],   // [{url, type, name}]
+  pendingAtts: [],
   streaming: false,
   activeConvIdx: null,
-  activeConvId: null,   // stable string ID (e.g. "conv_abc123")
+  activeConvId: null,
 };
 
 // ─── URL / HISTORY HELPERS ────────────────────────────────────────────
@@ -1344,8 +1340,7 @@ function showCreditModal() {
 }
 
 async function resetFromCredit() {
-  const carry = document.getElementById('creditCarryCheck').checked;
-  await doReset(carry, 'creditModal', 'creditResetBtn');
+  await doReset(true, 'creditModal', 'creditResetBtn');
 }
 
 async function doReset(carry, modalId, btnId) {
@@ -1375,25 +1370,14 @@ async function doReset(carry, modalId, btnId) {
       S.email = d.email;
       S.model = d.model || S.model;
       S.accountCreated = true;
-      S.msgCount = 0;
       closeModal(modalId);
       updateSidebar();
 
-      if (carry && d.new_conv_id) {
-        // New account created; restore to the same conversation (now under new account)
+      // Bulunduğun yerde kal — ekran temizlenmez, sayfa değişmez.
+      if (d.new_conv_id) {
         S.activeConvId = d.new_conv_id;
-        S.activeConvIdx = d.new_conv_idx !== undefined ? d.new_conv_idx : null;
-        setUrlConvId(S.activeConvId);
-        await refreshConversations();
-        await loadHistory();
-        toast('Geçmiş yeni hesaba taşındı', 'success');
-      } else {
-        S.activeConvId = null;
-        S.activeConvIdx = null;
-        setUrlConvId(null);
-        await refreshConversations();
-        if (!carry) clearMessages();
       }
+      await refreshConversations();
       toast(`Yeni hesap: ${d.email}`, 'success');
     } else {
       toast(d.error || 'Sıfırlama başarısız', 'error');
