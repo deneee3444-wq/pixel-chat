@@ -288,25 +288,31 @@ def stream_message(token, api_conv_id, message, model_id, history=None, attachme
             f"{BASE_URL}/functions/v1/chat-completion",
             headers=headers, json=payload, stream=True, timeout=120
         ) as res:
+            res.encoding = "utf-8"
             if res.status_code == 423:
                 yield f"data: {json.dumps({'type': 'error', 'code': 'LOCKED'})}\n\n"
                 return
-            if res.status_code == 402 or "INSUFFICIENT_CREDITS" in res.text:
+            if res.status_code == 402:
                 yield f"data: {json.dumps({'type': 'error', 'code': 'INSUFFICIENT_CREDITS'})}\n\n"
                 return
             if res.status_code != 200:
                 yield f"data: {json.dumps({'type': 'error', 'code': f'HTTP_{res.status_code}'})}\n\n"
                 return
 
-            for raw_line in res.iter_lines():
-                if not raw_line:
+            for raw_line in res.iter_lines(decode_unicode=True, chunk_size=1):
+                if raw_line is None:
                     continue
-                line = raw_line.decode("utf-8")
-                if not line.startswith("data: "):
+                line = raw_line.strip()
+                if not line:
                     continue
-                data_str = line[6:]
+                if not line.startswith("data:"):
+                    continue
+                data_str = line[5:].strip()
                 if data_str == "[DONE]":
                     break
+                if "INSUFFICIENT_CREDITS" in data_str:
+                    yield f"data: {json.dumps({'type': 'error', 'code': 'INSUFFICIENT_CREDITS'})}\n\n"
+                    return
                 try:
                     data = json.loads(data_str)
                     if data.get("type") == "billing":
