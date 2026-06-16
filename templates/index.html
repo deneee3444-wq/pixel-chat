@@ -893,6 +893,7 @@ const S = {
   msgCount: 0,
   pendingAtts: [],
   streaming: false,
+  abortController: null,
   activeConvIdx: null,
   activeConvId: null,
 };
@@ -1262,11 +1263,21 @@ async function loadHistory() {
   scrollBottom();
 }
 
+// ─── STOP STREAMING ───────────────────────────────────────────────────
+function stopStreaming() {
+  if (!S.streaming || !S.abortController) return;
+  S.abortController.abort();
+}
+
 // ─── SEND MESSAGE ─────────────────────────────────────────────────────
 async function sendMessage() {
   const input = document.getElementById('msgInput');
   const msg = input.value.trim();
-  if (!msg || S.streaming) return;
+  if (S.streaming) {
+    stopStreaming();
+    return;
+  }
+  if (!msg) return;
 
   if (!S.accountCreated) {
     toast('Önce sol alttan bir hesap oluşturun', 'warn');
@@ -1287,6 +1298,7 @@ async function sendMessage() {
 
   S.streaming = true;
   setSendDisabled(true);
+  S.abortController = new AbortController();
 
   let full = '';
   let textNode = aiEl.querySelector('.msg-text');
@@ -1294,6 +1306,7 @@ async function sendMessage() {
   try {
     const resp = await fetch('/api/send', {
       method:'POST', headers:{'Content-Type':'application/json'},
+      signal: S.abortController.signal,
       body: JSON.stringify({
         message: msg,
         attachments: atts.map(a=>({url:a.url,type:a.type})),
@@ -1359,7 +1372,7 @@ async function sendMessage() {
             }
             const pendingAttsSnap = [...atts];
             if (isAutoMode()) {
-              addSystemLog('⚠️ Akış kesildi — "Devam et" otomatik gönderiliyor...');
+              addSystemLog('⚠️ Akış kesildi — "Devam et" otomatik gönderiliyor.');
               // Arkaplanda yeni konuşmaya geç (locked mantığı gibi), "Devam et" gönder
               await doAutoNewChatBackground('Devam et', pendingAttsSnap);
             } else {
@@ -1381,7 +1394,7 @@ async function sendMessage() {
               // 423 - Konuşma kilitlendi
               aiEl.remove();
               if (isAutoMode()) {
-                addSystemLog(`⚠️ 423 Locked — Arkaplanda yeni konuşma açılıyor...`);
+                addSystemLog(`⚠️ 423 Locked — Arkaplanda yeni konuşma açılıyor.`);
                 markUserMsgFailed();
                 await doAutoNewChatBackground(msg, atts);
               } else {
@@ -1419,14 +1432,18 @@ async function sendMessage() {
       }
     }
   } catch(e) {
-    textNode.innerHTML = `<span style="color:var(--error)">Bağlantı hatası: ${e.message}</span>`;
-    markUserMsgFailed();
-  } finally {
-    if (full) {
-      S.msgCount++;
-      updateSidebar();
-      await refreshConversations();
+    if (e.name === 'AbortError') {
+      if (full) {
+        renderMarkdown(textNode, full, false);
+      } else {
+        aiEl.remove();
+      }
+    } else {
+      textNode.innerHTML = `<span style="color:var(--error)">Bağlantı hatası: ${e.message}</span>`;
+      markUserMsgFailed();
     }
+  } finally {
+    S.abortController = null;
     S.streaming = false;
     setSendDisabled(false);
     scrollBottom();
@@ -1802,8 +1819,20 @@ function toast(msg, type='') {
 
 // ─── UTILS ────────────────────────────────────────────────────────────
 function setSendDisabled(d) {
-  document.getElementById('sendBtn').disabled = d;
   document.getElementById('attachBtn').disabled = d;
+  const sendBtn = document.getElementById('sendBtn');
+  if (!sendBtn) return;
+
+  sendBtn.disabled = false;
+  if (d) {
+    sendBtn.title = 'Durdur';
+    sendBtn.setAttribute('aria-label', 'Durdur');
+    sendBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg>';
+  } else {
+    sendBtn.title = 'Gönder';
+    sendBtn.setAttribute('aria-label', 'Gönder');
+    sendBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>';
+  }
 }
 
 function autoResize(el) {
