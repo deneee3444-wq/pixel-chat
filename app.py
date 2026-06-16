@@ -299,6 +299,7 @@ def stream_message(token, api_conv_id, message, model_id, history=None, attachme
                 yield f"data: {json.dumps({'type': 'error', 'code': f'HTTP_{res.status_code}'})}\n\n"
                 return
 
+            done_received = False
             for raw_line in res.iter_lines(decode_unicode=True, chunk_size=1):
                 if raw_line is None:
                     continue
@@ -309,6 +310,7 @@ def stream_message(token, api_conv_id, message, model_id, history=None, attachme
                     continue
                 data_str = line[5:].strip()
                 if data_str == "[DONE]":
+                    done_received = True
                     break
                 if "INSUFFICIENT_CREDITS" in data_str:
                     yield f"data: {json.dumps({'type': 'error', 'code': 'INSUFFICIENT_CREDITS'})}\n\n"
@@ -327,10 +329,19 @@ def stream_message(token, api_conv_id, message, model_id, history=None, attachme
                 except json.JSONDecodeError:
                     pass
 
-        yield f"data: {json.dumps({'type': 'done', 'full_response': full_response})}\n\n"
+        if done_received and full_response:
+            yield f"data: {json.dumps({'type': 'done', 'full_response': full_response})}\n\n"
+        elif full_response:
+            # [DONE] gelmeden akış bitti — kesilme
+            yield f"data: {json.dumps({'type': 'stream_interrupted', 'full_response': full_response})}\n\n"
+        else:
+            yield f"data: {json.dumps({'type': 'stream_interrupted', 'full_response': ''})}\n\n"
 
     except Exception as e:
-        yield f"data: {json.dumps({'type': 'error', 'code': str(e)})}\n\n"
+        if full_response:
+            yield f"data: {json.dumps({'type': 'stream_interrupted', 'full_response': full_response})}\n\n"
+        else:
+            yield f"data: {json.dumps({'type': 'error', 'code': str(e)})}\n\n"
 
 
 # ===================== ROUTES =====================
