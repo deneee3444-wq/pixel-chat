@@ -51,7 +51,7 @@
   --warn: #fbbf24;
 }
 
-html,body{height:100%;height:100dvh;overflow:hidden}
+html,body{height:100%;height:100dvh;overflow:hidden;max-width:100vw}
 body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.6}
 
 /* ─── SCROLLBAR ─── */
@@ -302,14 +302,21 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
 
 /* ─── MESSAGES ─── */
 .messages{
-  flex:1;overflow-y:auto;padding:24px 0 8px;
+  flex:1;min-height:0;overflow:hidden;padding:24px 0 8px;
   display:flex;flex-direction:column;
 }
-.messages-inner{max-width:760px;width:100%;margin:0 auto;padding:0 20px}
+.messages-inner{
+  flex:1;min-height:0;
+  max-width:760px;width:100%;margin:0 auto;padding:0 20px 12px;
+  overflow-y:auto;overflow-x:hidden;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
 
 .msg{
   display:flex;gap:14px;padding:6px 0;
-  animation:msg-in .2s ease;
+  animation:msg-in .2s ease;min-width:0;overflow:hidden;
 }
 @keyframes msg-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 
@@ -322,8 +329,9 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
 .msg-avatar.ai{background:var(--accent-dim);border:1px solid rgba(217,119,87,.2)}
 
 .msg-body{flex:1;min-width:0;padding-top:4px;overflow:hidden}
-.msg-role{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--text3);margin-bottom:6px}
+.msg-role{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--text3);margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%}
 .msg-role.user{color:rgba(217,119,87,.8)}
+.failed-badge{font-size:10px;font-weight:400;opacity:.85;display:inline-flex;align-items:center;gap:2px;color:var(--error);white-space:nowrap;flex-shrink:0;margin-left:auto}
 .msg-role.ai{color:var(--text3)}
 
 .msg-text{color:var(--text);line-height:1.7;word-wrap:break-word;overflow-wrap:break-word;min-width:0}
@@ -556,6 +564,9 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
 .btn-primary{background:var(--accent);color:#fff}
 .btn-primary:hover{background:var(--accent-hover)}
 .btn-primary:disabled{opacity:.5;cursor:not-allowed}
+.btn-danger{background:var(--error);color:#fff}
+.btn-danger:hover{filter:brightness(.95)}
+.btn-danger:disabled{opacity:.5;cursor:not-allowed}
 .btn-secondary{background:var(--surface2);color:var(--text2);border:1px solid var(--border) !important}
 .btn-secondary:hover{border-color:var(--border) !important;background:var(--border);color:var(--text)}
 
@@ -576,7 +587,70 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
 .toast.error{border-color:rgba(239,68,68,.3);color:var(--error)}
 .toast.warn{border-color:rgba(245,158,11,.3);color:var(--warn)}
 
-/* ─── SIDEBAR OVERLAY (mobile) ─── */
+/* ─── CHAT HEADER ─── */
+.chat-header{
+  display:flex;align-items:center;justify-content:flex-end;
+  padding:6px 12px;border-bottom:none;
+  background:transparent;flex-shrink:0;min-height:44px;
+  position:relative;
+}
+.chat-header-right{display:flex;align-items:center;gap:4px;position:relative}
+
+/* ─── DOWNLOAD MENU ─── */
+.download-menu{
+  display:none;position:absolute;top:calc(100% + 8px);right:0;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:10px;padding:4px;min-width:190px;z-index:300;
+  box-shadow:0 10px 30px rgba(0,0,0,.14);
+}
+.download-menu.open{display:block}
+.download-menu button{
+  display:flex;align-items:center;gap:8px;padding:8px 10px;
+  border-radius:7px;border:none;background:none;cursor:pointer;
+  font-size:12.5px;color:var(--text2);font-family:inherit;text-align:left;
+  width:100%;transition:background .12s,color .12s;
+}
+.download-menu button:hover{background:var(--border);color:var(--text)}
+.download-menu button svg{flex-shrink:0;opacity:.7}
+
+/* ─── SETTINGS POPUP ─── */
+.settings-popup{
+  display:none;position:absolute;top:52px;right:12px;z-index:300;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:14px;padding:16px;min-width:220px;
+  box-shadow:0 16px 40px rgba(0,0,0,.14);
+}
+.settings-popup.open{display:block}
+.settings-popup-title{
+  font-size:13px;font-weight:600;color:var(--text);
+  margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border);
+}
+.settings-section-label{
+  font-size:10px;font-weight:500;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--text3);
+  margin:10px 0 6px;
+}
+.settings-section-label:first-of-type{margin-top:0}
+.settings-row{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:5px 0;
+}
+.settings-row-text{font-size:13px;color:var(--text2)}
+.settings-row-btn{
+  display:flex;align-items:center;gap:8px;padding:8px 10px;
+  border-radius:8px;border:none;background:none;cursor:pointer;
+  font-size:13px;color:var(--text2);font-family:inherit;text-align:left;
+  width:100%;transition:background .12s,color .12s;
+}
+.settings-row-btn:hover{background:var(--surface2);color:var(--text)}
+.settings-row-btn svg{flex-shrink:0;opacity:.7}
+
+/* Hide chat-header on mobile (topbar handles it) */
+@media(max-width:768px){
+  .chat-header{display:none}
+}
+
+
 .sidebar-overlay{
   display:none;position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.35);
 }
@@ -598,12 +672,12 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
     flex:1;min-height:0;
     display:flex;flex-direction:column;
   }
-  .messages{flex:1;min-height:0;padding:12px 0 4px}
+  .messages{flex:1;min-height:0;overflow:hidden;padding:12px 0 4px}
   .input-area{
     padding:8px 12px calc(env(safe-area-inset-bottom, 0px) + 18px);
     flex-shrink:0;
   }
-  .messages-inner{padding:0 12px}
+  .messages-inner{padding:0 12px 10px}
   .msg-images img{max-width:min(200px,60vw)}
   .setup-card{padding:32px 24px}
   .modal{padding:24px 20px}
@@ -654,30 +728,18 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
     <div class="sidebar-spacer"></div>
 
     <div class="sidebar-account" id="accountBox">
-      <div class="account-label">Aktif Hesap</div>
+      <div class="account-label" id="accountLabel">Giriş Yapılmadı</div>
       <div class="account-row">
         <div class="account-email" id="accountEmail">
-          <span class="account-dot"></span>Yükleniyor...
+          <span class="account-dot" id="accountDot"></span>Yükleniyor...
         </div>
-        <button class="account-create-btn" id="createAccountBtn" onclick="quickCreateAccount()" title="Yeni Hesap Oluştur">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <button class="account-create-btn" id="createAccountBtn" onclick="quickCreateAccount()" title="Hesap Oluştur / Giriş Yap">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
         </button>
-      </div>
-      <div class="auto-mode-row">
-        <span class="auto-mode-label">🤖 Otomatik Mod</span>
-        <label class="switch">
-          <input type="checkbox" id="autoModeToggle" onchange="saveAutoMode()">
-          <span class="slider"></span>
-        </label>
       </div>
     </div>
 
     <div class="sidebar-footer">
-      <button class="sidebar-btn" id="themeToggleBtn" onclick="toggleTheme()">
-        <svg id="themeIconMoon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-        <svg id="themeIconSun" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-        <span id="themeLabel">Karanlık Mod</span>
-      </button>
       <button class="sidebar-btn" onclick="logout()">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
         Çıkış Yap
@@ -695,6 +757,60 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
       <div>
         <div class="topbar-title">PixelBunny AI</div>
         <div class="topbar-model" id="topbarModel">—</div>
+      </div>
+    </div>
+
+    <!-- CHAT HEADER (desktop) -->
+    <div class="chat-header" id="chatHeader">
+      <div class="chat-header-right">
+        <button class="icon-btn" id="downloadBtn" title="Sohbeti İndir" onclick="toggleDownloadMenu(event)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        </button>
+        <div class="download-menu" id="downloadMenu">
+          <button onclick="downloadChat('html')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            HTML olarak indir
+          </button>
+          <button onclick="downloadChat('txt')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            TXT olarak indir
+          </button>
+          <button onclick="downloadChat('json')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            JSON olarak indir
+          </button>
+        </div>
+        <button class="icon-btn" id="settingsBtn" title="Ayarlar" onclick="toggleSettingsPopup(event)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- SETTINGS POPUP -->
+    <div class="settings-popup" id="settingsPopup">
+      <div class="settings-popup-title">Ayarlar</div>
+      <div class="settings-section-label">Tema</div>
+      <button class="settings-row-btn" onclick="toggleTheme()">
+        <svg id="settingsThemeIconMoon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <svg id="settingsThemeIconSun" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <span id="settingsThemeLabel">Karanlık Mod</span>
+      </button>
+      <div class="settings-section-label">Kaydırma</div>
+      <div class="settings-row">
+        <span class="settings-row-text">Otomatik Kaydır</span>
+        <label class="switch">
+          <input type="checkbox" id="autoScrollToggle" onchange="saveAutoScroll()">
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="settings-section-label">Otomatik Mod</div>
+      <div class="settings-row">
+        <span class="settings-row-text">Otomatik Giriş</span>
+        <label class="switch">
+          <input type="checkbox" id="autoModeToggle" onchange="saveAutoMode()">
+          <span class="slider"></span>
+        </label>
       </div>
     </div>
 
@@ -747,6 +863,19 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
     <div class="modal-btns">
       <button class="btn-secondary" onclick="closeModal('creditModal')">Kapat</button>
       <button class="btn-primary" id="creditResetBtn" onclick="resetFromCredit()">Yeni Hesap Aç</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIRM MODAL -->
+<div class="modal-overlay" id="confirmModal" style="display:none" onclick="closeConfirmModal(false)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <span class="modal-icon">❓</span>
+    <h2 id="confirmModalTitle">Emin misin?</h2>
+    <p id="confirmModalText">Bu işlemi onaylıyor musun?</p>
+    <div class="modal-btns">
+      <button class="btn-secondary" id="confirmModalCancel" onclick="closeConfirmModal(false)">Vazgeç</button>
+      <button class="btn-danger" id="confirmModalOk" onclick="closeConfirmModal(true)">Onayla</button>
     </div>
   </div>
 </div>
@@ -915,12 +1044,17 @@ function enterApp() {
 }
 
 function updateSidebar() {
-  if (S.accountCreated) {
-    document.getElementById('accountEmail').innerHTML =
-      `<span class="account-dot"></span>${S.email}`;
+  const labelEl = document.getElementById('accountLabel');
+  const emailEl = document.getElementById('accountEmail');
+  if (S.accountCreated && S.email) {
+    labelEl.textContent = 'Giriş Yapıldı';
+    emailEl.innerHTML = `<span class="account-dot" style="background:var(--success);animation:pulse-dot 2s infinite"></span>${S.email}`;
+  } else if (S.accountCreated) {
+    labelEl.textContent = 'Giriş Yapıldı';
+    emailEl.innerHTML = `<span class="account-dot" style="background:var(--success);animation:pulse-dot 2s infinite"></span>Hesap aktif`;
   } else {
-    document.getElementById('accountEmail').innerHTML =
-      `<span class="account-dot" style="background:var(--text3);animation:none"></span>Hesap yok`;
+    labelEl.textContent = 'Giriş Yapılmadı';
+    emailEl.innerHTML = `<span class="account-dot" style="background:var(--text3);animation:none"></span>Hesap yok`;
   }
   document.getElementById('topbarModel').textContent = modelLabel(S.model);
   renderModelPicker();
@@ -928,7 +1062,13 @@ function updateSidebar() {
 
 // ─── LOGOUT ─────────────────────────────────────────────────────────────
 async function logout() {
-  if (!confirm('Çıkış yapılsın mı?')) return;
+  if (!(await showConfirmModal({
+    title: 'Çıkış yapılsın mı?',
+    message: 'Oturumu kapatmak istiyorsun.',
+    confirmText: 'Çıkış Yap',
+    cancelText: 'İptal',
+    destructive: true
+  }))) return;
   try {
     await fetch('/api/logout', {method:'POST'});
   } catch(e) {}
@@ -1037,7 +1177,13 @@ function startRenameConv(e, convId) {
 async function deleteConv(e, convId) {
   e.stopPropagation();
   document.querySelectorAll('.conv-menu').forEach(m => m.remove());
-  if (!confirm('Bu konuşma silinsin mi?')) return;
+  if (!(await showConfirmModal({
+    title: 'Konuşma silinsin mi?',
+    message: 'Bu sohbet geçmişi listeden kaldırılacak.',
+    confirmText: 'Sil',
+    cancelText: 'İptal',
+    destructive: true
+  }))) return;
 
   try {
     const r = await fetch('/api/conversation/delete', {
@@ -1159,6 +1305,7 @@ async function sendMessage() {
       const err = await resp.json();
       textNode.textContent = err.error || 'Hata oluştu.';
       textNode.style.color = 'var(--error)';
+      markUserMsgFailed();
       // Restore message to prompt
       document.getElementById('msgInput').value = msg;
       autoResize(document.getElementById('msgInput'));
@@ -1202,12 +1349,40 @@ async function sendMessage() {
             updateSidebar();
             // Refresh conv list to show new/updated conversation
             await refreshConversations();
+          } else if (d.type === 'stream_interrupted') {
+            // Akış kesildi — geçmişe kısmı kaydedildi, "Devam et" gerekli
+            if (d.full_response || full) {
+              renderMarkdown(textNode, d.full_response || full, false);
+              S.msgCount++;
+              updateSidebar();
+              await refreshConversations();
+            }
+            const pendingAttsSnap = [...atts];
+            if (isAutoMode()) {
+              addSystemLog('⚠️ Akış kesildi — "Devam et" otomatik gönderiliyor...');
+              // Arkaplanda yeni konuşmaya geç (locked mantığı gibi), "Devam et" gönder
+              await doAutoNewChatBackground('Devam et', pendingAttsSnap);
+            } else {
+              addSystemLogWithAction(
+                '⚠️ Akış kesildi — cevap tamamlanmadı.',
+                'Devam et',
+                async () => { await doNewChatBackground('Devam et', pendingAttsSnap); }
+              );
+              // Prompt'a da koy
+              const inp = document.getElementById('msgInput');
+              if (!inp.value.trim()) {
+                inp.value = 'Devam et';
+                autoResize(inp);
+                inp.focus();
+              }
+            }
           } else if (d.type === 'error') {
             if (d.code === 'LOCKED') {
               // 423 - Konuşma kilitlendi
               aiEl.remove();
               if (isAutoMode()) {
                 addSystemLog(`⚠️ 423 Locked — Arkaplanda yeni konuşma açılıyor...`);
+                markUserMsgFailed();
                 await doAutoNewChatBackground(msg, atts);
               } else {
                 addSystemLogWithAction(
@@ -1215,6 +1390,7 @@ async function sendMessage() {
                   'Yeni Sohbet Başlat',
                   async () => { await doNewChatBackground(msg, atts); }
                 );
+                markUserMsgFailed();
                 restorePrompt(msg);
               }
             } else if (d.code === 'INSUFFICIENT_CREDITS') {
@@ -1222,6 +1398,7 @@ async function sendMessage() {
               renderMarkdown(textNode, full || '', false);
               if (isAutoMode()) {
                 addSystemLog(`⚠️ 402 Kredi tükendi — Arkaplanda yeni hesap açılıyor...`);
+                markUserMsgFailed();
                 await doAutoNewAccount(msg, atts);
               } else {
                 addSystemLogWithAction(
@@ -1229,10 +1406,12 @@ async function sendMessage() {
                   'Yeni Hesap Aç',
                   async () => { await doManualNewAccount(msg, atts); }
                 );
+                markUserMsgFailed();
                 restorePrompt(msg);
               }
             } else {
               textNode.innerHTML = `<span style="color:var(--error)">Hata: ${d.code}</span>`;
+              markUserMsgFailed();
               restorePrompt(msg);
             }
           }
@@ -1241,6 +1420,7 @@ async function sendMessage() {
     }
   } catch(e) {
     textNode.innerHTML = `<span style="color:var(--error)">Bağlantı hatası: ${e.message}</span>`;
+    markUserMsgFailed();
   } finally {
     if (full) {
       S.msgCount++;
@@ -1337,10 +1517,24 @@ function renderMarkdown(el, text, streaming=false) {
   });
 }
 
+function getMessagesScrollEl() {
+  return document.getElementById('messagesInner') || document.getElementById('messages');
+}
+
 function scrollBottom(force=false) {
-  const msgs = document.getElementById('messages');
-  const atBottom = msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight < 120;
-  if (atBottom || force) msgs.scrollTop = msgs.scrollHeight;
+  const el = getMessagesScrollEl();
+  if (!el) return;
+  if (!force && !isAutoScroll()) return;
+
+  const doScroll = () => {
+    const target = Math.max(0, el.scrollHeight - el.clientHeight);
+    el.scrollTop = target;
+  };
+
+  requestAnimationFrame(() => {
+    doScroll();
+    requestAnimationFrame(doScroll);
+  });
 }
 
 // ─── FILE UPLOAD ───────────────────────────────────────────────────────
@@ -1532,8 +1726,55 @@ async function quickCreateAccount() {
 // ─── MODAL ────────────────────────────────────────────────────────────
 function showModal(id) { document.getElementById(id).style.display = 'flex'; }
 function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+let confirmModalResolver = null;
+function showConfirmModal({
+  title = 'Emin misin?',
+  message = 'Bu işlemi onaylıyor musun?',
+  confirmText = 'Onayla',
+  cancelText = 'Vazgeç',
+  destructive = true
+} = {}) {
+  const modal = document.getElementById('confirmModal');
+  const titleEl = document.getElementById('confirmModalTitle');
+  const textEl = document.getElementById('confirmModalText');
+  const okBtn = document.getElementById('confirmModalOk');
+  const cancelBtn = document.getElementById('confirmModalCancel');
+
+  if (!modal || !titleEl || !textEl || !okBtn || !cancelBtn) {
+    return Promise.resolve(window.confirm(message));
+  }
+
+  titleEl.textContent = title;
+  textEl.textContent = message;
+  okBtn.textContent = confirmText;
+  cancelBtn.textContent = cancelText;
+  okBtn.className = destructive ? 'btn-danger' : 'btn-primary';
+
+  modal.style.display = 'flex';
+
+  return new Promise(resolve => {
+    confirmModalResolver = resolve;
+  });
+}
+
+function closeConfirmModal(confirmed) {
+  const modal = document.getElementById('confirmModal');
+  if (modal) modal.style.display = 'none';
+  if (confirmModalResolver) {
+    const resolve = confirmModalResolver;
+    confirmModalResolver = null;
+    resolve(!!confirmed);
+  }
+}
+
 document.addEventListener('keydown', e => { if (e.key === 'Escape') {
-  closeModal('creditModal');
+  const confirmModal = document.getElementById('confirmModal');
+  if (confirmModal && confirmModal.style.display === 'flex') {
+    closeConfirmModal(false);
+  } else {
+    closeModal('creditModal');
+  }
 }});
 
 // ─── SIDEBAR (mobile) ─────────────────────────────────────────────────
@@ -1585,12 +1826,16 @@ marked.setOptions({
 // ─── THEME ────────────────────────────────────────────────────────────
 function applyTheme(dark) {
   document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
-  document.getElementById('themeIconMoon').style.display = dark ? 'none' : '';
-  document.getElementById('themeIconSun').style.display = dark ? '' : 'none';
-  document.getElementById('themeLabel').textContent = dark ? 'Aydınlık Mod' : 'Karanlık Mod';
   document.getElementById('hljs-light').disabled = dark;
   document.getElementById('hljs-dark').disabled = !dark;
   localStorage.setItem('pb-theme', dark ? 'dark' : 'light');
+  // Sync settings popup theme icons
+  const moon2 = document.getElementById('settingsThemeIconMoon');
+  const sun2 = document.getElementById('settingsThemeIconSun');
+  const lbl2 = document.getElementById('settingsThemeLabel');
+  if (moon2) moon2.style.display = dark ? 'none' : '';
+  if (sun2) sun2.style.display = dark ? '' : 'none';
+  if (lbl2) lbl2.textContent = dark ? 'Aydınlık Mod' : 'Karanlık Mod';
 }
 
 function toggleTheme() {
@@ -1621,12 +1866,27 @@ function saveAutoMode() {
   }
 })();
 
+// Load auto-scroll state
+(function() {
+  const saved = localStorage.getItem('pb-auto-scroll');
+  // Checkbox henüz DOM'da olmayabilir, boot() sonrasında da çalışır
+  function applyAutoScroll() {
+    const t = document.getElementById('autoScrollToggle');
+    if (t) {
+      t.checked = (saved === null || saved === '1');
+    } else {
+      setTimeout(applyAutoScroll, 50);
+    }
+  }
+  applyAutoScroll();
+})();
+
 // ─── SYSTEM LOG (chat alanında bilgi mesajı) ──────────────────────────
 function addSystemLog(text) {
   hideEmpty();
   const inner = document.getElementById('messagesInner');
   const el = document.createElement('div');
-  el.style.cssText = 'text-align:center;padding:6px 16px;font-size:12px;color:var(--text3);margin:4px auto;background:var(--surface2);border-radius:8px;max-width:760px;';
+  el.style.cssText = 'text-align:center;padding:4px 16px;font-size:12px;color:var(--text3);margin:2px auto;max-width:760px;';
   el.textContent = text;
   inner.appendChild(el);
   scrollBottom();
@@ -1661,6 +1921,25 @@ function addSystemLogWithAction(text, btnLabel, onClick) {
   el.appendChild(btn);
   inner.appendChild(el);
   scrollBottom();
+}
+
+// ─── MARK USER MSG FAILED ─────────────────────────────────────────────
+function markUserMsgFailed() {
+  const inner = document.getElementById('messagesInner');
+  const msgs = inner.querySelectorAll('.msg');
+  // Son user mesajını bul
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const roleEl = msgs[i].querySelector('.msg-role.user');
+    if (roleEl) {
+      if (!roleEl.querySelector('.failed-badge')) {
+        const badge = document.createElement('span');
+        badge.className = 'failed-badge';
+        badge.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:middle;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> gönderilemedi';
+        roleEl.appendChild(badge);
+      }
+      break;
+    }
+  }
 }
 
 // ─── RESTORE PROMPT ───────────────────────────────────────────────────
@@ -1822,6 +2101,258 @@ async function doAutoNewAccount(pendingMsg, pendingAtts) {
     addSystemLog('Otomatik hesap değişimi başarısız: ' + e.message);
     restorePrompt(pendingMsg);
   }
+}
+
+// ─── AUTO SCROLL ──────────────────────────────────────────────────────
+function isAutoScroll() {
+  const toggle = document.getElementById('autoScrollToggle');
+  return toggle ? toggle.checked : true;
+}
+
+function saveAutoScroll() {
+  localStorage.setItem('pb-auto-scroll', isAutoScroll() ? '1' : '0');
+  updateSettingsThemeIcons();
+}
+
+
+// ─── SETTINGS POPUP ────────────────────────────────────────────────────
+function toggleSettingsPopup(e) {
+  e.stopPropagation();
+  const popup = document.getElementById('settingsPopup');
+  const dm = document.getElementById('downloadMenu');
+  if (dm) dm.classList.remove('open');
+  popup.classList.toggle('open');
+  if (popup.classList.contains('open')) updateSettingsThemeIcons();
+}
+
+function updateSettingsThemeIcons() {
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const moon = document.getElementById('settingsThemeIconMoon');
+  const sun = document.getElementById('settingsThemeIconSun');
+  const lbl = document.getElementById('settingsThemeLabel');
+  if (moon) moon.style.display = isDark ? 'none' : '';
+  if (sun) sun.style.display = isDark ? '' : 'none';
+  if (lbl) lbl.textContent = isDark ? 'Aydınlık Mod' : 'Karanlık Mod';
+  const t = document.getElementById('autoScrollToggle');
+  if (t) {
+    const saved = localStorage.getItem('pb-auto-scroll');
+    t.checked = (saved === null || saved === '1');
+  }
+}
+
+document.addEventListener('click', (e) => {
+  const popup = document.getElementById('settingsPopup');
+  const settingsBtn = document.getElementById('settingsBtn');
+  if (popup && !popup.contains(e.target) && e.target !== settingsBtn && !settingsBtn?.contains(e.target)) {
+    popup.classList.remove('open');
+  }
+  const dm = document.getElementById('downloadMenu');
+  const dlBtn = document.getElementById('downloadBtn');
+  if (dm && !dm.contains(e.target) && e.target !== dlBtn && !dlBtn?.contains(e.target)) {
+    dm.classList.remove('open');
+  }
+});
+
+// ─── DOWNLOAD MENU ─────────────────────────────────────────────────────
+function toggleDownloadMenu(e) {
+  e.stopPropagation();
+  const dm = document.getElementById('downloadMenu');
+  const popup = document.getElementById('settingsPopup');
+  if (popup) popup.classList.remove('open');
+  dm.classList.toggle('open');
+}
+
+function getHistoryData() {
+  const msgs = document.querySelectorAll('#messagesInner .msg');
+  const result = [];
+  msgs.forEach(el => {
+    const roleEl = el.querySelector('.msg-role');
+    const textEl = el.querySelector('.msg-text');
+    if (!roleEl || !textEl) return;
+    const isUser = roleEl.classList.contains('user');
+    const role = isUser ? 'user' : 'assistant';
+    const text = (textEl.innerText || textEl.textContent || '').trim();
+    const images = Array.from(el.querySelectorAll('.msg-images img')).map(i => i.src);
+    result.push({ role, text, images });
+  });
+  return result;
+}
+
+function downloadChat(format) {
+  document.getElementById('downloadMenu').classList.remove('open');
+  const history = getHistoryData();
+  if (!history.length) { toast('İndirilecek mesaj yok', 'warn'); return; }
+
+  const now = new Date();
+  const dateStr = now.toISOString().slice(0,16).replace('T','_').replace(':','-');
+  const filename = `pixelbunny_${dateStr}`;
+
+  if (format === 'json') {
+    const data = JSON.stringify(history, null, 2);
+    triggerDownload(filename + '.json', data, 'application/json');
+
+  } else if (format === 'txt') {
+    let txt = '';
+    history.forEach((m, i) => {
+      const label = m.role === 'user' ? 'Sen' : 'PixelBunny';
+      txt += label + ':\n';
+      txt += m.text;
+      if (m.images && m.images.length) {
+        txt += '\n[' + m.images.length + ' resim eklendi]';
+      }
+      if (i < history.length - 1) txt += '\n\n---\n\n';
+    });
+    triggerDownload(filename + '.txt', txt, 'text/plain;charset=utf-8');
+
+  } else if (format === 'html') {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const themeVars = isDark ? {
+      bg: '#18171a',
+      sidebar: '#1f1e22',
+      surface: '#27262b',
+      surface2: '#2f2e34',
+      border: '#3a3840',
+      accent: '#e0845e',
+      accentDim: 'rgba(224,132,94,.1)',
+      accentHover: '#d06640',
+      accentLight: '#e0845e',
+      text: '#ede9e4',
+      text2: '#9e9891',
+      text3: '#5e5a55',
+      userBg: '#33271f',
+      error: '#f87171',
+      success: '#4ade80',
+      warn: '#fbbf24'
+    } : {
+      bg: '#faf9f6',
+      sidebar: '#f4f3ee',
+      surface: '#ffffff',
+      surface2: '#f0eee6',
+      border: '#e6e3da',
+      accent: '#d97757',
+      accentDim: 'rgba(217,119,87,.08)',
+      accentHover: '#c35f3f',
+      accentLight: '#bd5b3a',
+      text: '#2d2a26',
+      text2: '#79746c',
+      text3: '#ada89f',
+      userBg: '#f1e3d8',
+      error: '#dc2626',
+      success: '#16a34a',
+      warn: '#d97706'
+    };
+
+    const messagesClone = document.getElementById('messages').cloneNode(true);
+    messagesClone.id = 'messages-export';
+    messagesClone.querySelectorAll('.copy-btn, .msg-use-btn').forEach(btn => btn.remove());
+    messagesClone.querySelectorAll('.stream-cursor').forEach(el => el.remove());
+    messagesClone.querySelectorAll('.typing-indicator').forEach(el => {
+      el.outerHTML = '<span style="color:' + themeVars.text3 + ';">Yazıyor...</span>';
+    });
+
+    const html = `<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PixelBunny AI — Sohbet ${dateStr}</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:${themeVars.bg};
+  --sidebar:${themeVars.sidebar};
+  --surface:${themeVars.surface};
+  --surface2:${themeVars.surface2};
+  --border:${themeVars.border};
+  --accent:${themeVars.accent};
+  --accent-dim:${themeVars.accentDim};
+  --accent-hover:${themeVars.accentHover};
+  --accent-light:${themeVars.accentLight};
+  --text:${themeVars.text};
+  --text2:${themeVars.text2};
+  --text3:${themeVars.text3};
+  --user-bg:${themeVars.userBg};
+}
+html,body{min-height:100%;background:var(--bg);color:var(--text)}
+body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;font-size:14px;line-height:1.6}
+.export-shell{max-width:760px;margin:0 auto;padding:24px 20px}
+.header{margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid var(--border)}
+.header h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
+.header p{font-size:12px;color:var(--text2);margin-top:4px}
+.messages{display:flex;flex-direction:column}
+.messages-inner{width:100%;overflow-x:hidden}
+.msg{display:flex;gap:14px;padding:6px 0;min-width:0;overflow:hidden}
+.msg-avatar{width:32px;height:32px;border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:16px;margin-top:2px}
+.msg-avatar.user{background:var(--user-bg);border:1px solid rgba(217,119,87,.3)}
+.msg-avatar.ai{background:var(--accent-dim);border:1px solid rgba(217,119,87,.2)}
+.msg-body{flex:1;min-width:0;padding-top:4px;overflow:hidden}
+.msg-role{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--text3);margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%}
+.msg-role.user{color:rgba(217,119,87,.8)}
+.failed-badge{font-size:10px;font-weight:400;opacity:.85;display:inline-flex;align-items:center;gap:2px;color:var(--error);white-space:nowrap;flex-shrink:0;margin-left:auto}
+.msg-text{color:var(--text);line-height:1.7;word-wrap:break-word;overflow-wrap:break-word;min-width:0}
+.msg-text p{margin-bottom:12px}
+.msg-text p:last-child{margin-bottom:0}
+.msg-text ul,.msg-text ol{margin:8px 0 12px 0;list-style:none;padding-left:0;counter-reset:ol-counter}
+.msg-text ol li{counter-increment:ol-counter;display:flex;gap:0.5em}
+.msg-text ol li::before{content:counter(ol-counter) ".";min-width:max-content;flex-shrink:0;text-align:right;color:var(--text2)}
+.msg-text ul li{display:flex;gap:0.5em}
+.msg-text ul li::before{content:"•";flex-shrink:0;color:var(--text2)}
+.msg-text li{margin-bottom:4px}
+.msg-text h1,.msg-text h2,.msg-text h3{margin:16px 0 8px;font-weight:600;line-height:1.3}
+.msg-text h1{font-size:20px}.msg-text h2{font-size:17px}.msg-text h3{font-size:15px}
+.msg-text strong{font-weight:600;color:var(--text)}
+.msg-text em{font-style:italic;color:var(--text2)}
+.msg-text blockquote{border-left:3px solid var(--accent);padding-left:12px;color:var(--text2);margin:8px 0;font-style:italic}
+.msg-text a{color:var(--accent-light);text-decoration:none}
+.msg-text a:hover{text-decoration:underline}
+.msg-text hr{border:none;border-top:1px solid var(--border);margin:16px 0}
+.msg-text table{border-collapse:collapse;font-size:13px;margin:0}
+.msg-text table th,.msg-text table td{border:1px solid var(--border);padding:7px 12px;text-align:left;white-space:nowrap}
+.msg-text table th{background:var(--surface2);font-weight:600}
+.msg-text table tr:nth-child(even) td{background:var(--accent-dim)}
+.table-wrap{overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:touch;margin:12px 0;border-radius:8px;border:1px solid var(--border)}
+.table-wrap table{margin:0;border:none;width:max-content;min-width:100%}
+.table-wrap table th,.table-wrap table td{border-color:var(--border)}
+.table-wrap table th:first-child,.table-wrap table td:first-child{border-left:none}
+.table-wrap table th:last-child,.table-wrap table td:last-child{border-right:none}
+.table-wrap table tr:first-child th,.table-wrap table tr:first-child td{border-top:none}
+.table-wrap table tr:last-child th,.table-wrap table tr:last-child td{border-bottom:none}
+.msg-text code{background:rgba(217,119,87,.1);border:1px solid rgba(217,119,87,.2);padding:1px 6px;border-radius:4px;font-size:12.5px;font-family:'SF Mono','Fira Code',monospace;color:var(--accent-light)}
+.msg-text pre{position:relative;margin:12px 0;border-radius:10px;background:var(--surface2) !important;border:1px solid var(--border);overflow:hidden}
+.msg-text pre code{background:none !important;border:none !important;padding:16px !important;font-size:12.5px;color:inherit;display:block;overflow-x:auto;line-height:1.6}
+.msg-images{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.msg-images img{max-width:240px;max-height:200px;object-fit:cover;border-radius:8px;border:1px solid var(--border)}
+.empty-state{padding:40px 20px;text-align:center;color:var(--text3)}
+.empty-state .big-emoji{font-size:52px;display:block;margin-bottom:12px}
+.empty-state h3{font-size:18px;font-weight:500;color:var(--text2);margin-bottom:8px}
+.empty-state p{font-size:13px;max-width:300px;line-height:1.6;margin:0 auto}
+</style>
+</head>
+<body>
+  <div class="export-shell">
+    <div class="header">
+      <h1>🐰 PixelBunny AI</h1>
+      <p>Sohbet dışa aktarıldı — ${now.toLocaleString('tr-TR')}</p>
+    </div>
+    ${messagesClone.outerHTML}
+  </div>
+</body>
+</html>`;
+    triggerDownload(filename + '.html', html, 'text/html;charset=utf-8');
+  }
+}
+
+function triggerDownload(filename, content, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
+  toast('İndirme başlatıldı', 'success');
 }
 
 // ─── BOOT ─────────────────────────────────────────────────────────────
