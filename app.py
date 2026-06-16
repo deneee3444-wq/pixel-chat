@@ -434,6 +434,7 @@ def api_send():
 
     def generate():
         full_response = ""
+        history_saved = False
         local_conv_id = sess.get('active_local_conv_id')
 
         if is_new_conv:
@@ -441,27 +442,40 @@ def api_send():
             sess['active_local_conv_id'] = local_conv_id
             yield f"data: {json.dumps({'type': 'conv_id', 'conv_id': local_conv_id})}\n\n"
 
-        for event in stream_message(token, api_conv_id, api_message, model, [], attachments):
-            yield event
-            if event.startswith("data: "):
-                try:
-                    d = json.loads(event[6:])
-                    if d.get('type') == 'chunk':
-                        full_response += d.get('content', '')
-                    elif d.get('type') == 'done':
-                        fr = d.get('full_response', full_response)
-                        user_content = (
-                            [{"type": "image_url", "image_url": {"url": a["url"]}} for a in attachments]
-                            + [{"type": "text", "text": message}]
-                        ) if attachments else message
-                        sess['history'].append({"role": "user", "content": user_content})
-                        sess['history'].append({"role": "assistant", "content": fr})
-                        save_conv_to_history(sess)
-                    elif d.get('type') == 'billing':
-                        sess['total_credits'] += d.get('credits', 0)
-                        sess['total_cost'] += d.get('cost', 0.0)
-                except Exception:
-                    pass
+        try:
+            for event in stream_message(token, api_conv_id, api_message, model, [], attachments):
+                yield event
+                if event.startswith("data: "):
+                    try:
+                        d = json.loads(event[6:])
+                        if d.get('type') == 'chunk':
+                            full_response += d.get('content', '')
+                        elif d.get('type') == 'done':
+                            fr = d.get('full_response', full_response)
+                            user_content = (
+                                [{"type": "image_url", "image_url": {"url": a["url"]}} for a in attachments]
+                                + [{"type": "text", "text": message}]
+                            ) if attachments else message
+                            sess['history'].append({"role": "user", "content": user_content})
+                            sess['history'].append({"role": "assistant", "content": fr})
+                            save_conv_to_history(sess)
+                            history_saved = True
+                        elif d.get('type') == 'billing':
+                            sess['total_credits'] += d.get('credits', 0)
+                            sess['total_cost'] += d.get('cost', 0.0)
+                    except Exception:
+                        pass
+        except GeneratorExit:
+            pass
+        finally:
+            if not history_saved and full_response:
+                user_content = (
+                    [{"type": "image_url", "image_url": {"url": a["url"]}} for a in attachments]
+                    + [{"type": "text", "text": message}]
+                ) if attachments else message
+                sess['history'].append({"role": "user", "content": user_content})
+                sess['history'].append({"role": "assistant", "content": full_response})
+                save_conv_to_history(sess)
 
     return Response(generate(), mimetype='text/event-stream',
                     headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
