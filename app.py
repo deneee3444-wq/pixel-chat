@@ -441,17 +441,34 @@ def api_send():
         else:
             api_message = message
 
+    # Yeni konuşmayı generate() içinde değil, burada (request başında) oluştur.
+    # Böylece istemci ne kadar hızlı iptal ederse etsin conv_id atanmış ve
+    # kullanıcı mesajı kaydedilmiş olur.
     is_new_conv = not sess.get('active_local_conv_id')
+    if is_new_conv:
+        new_local_conv_id = make_local_conv_id()
+        sess['active_local_conv_id'] = new_local_conv_id
+    else:
+        new_local_conv_id = None
+
+    # Kullanıcı mesajını hemen geçmişe ekle (AI yanıtı için placeholder).
+    # Bu sayede stream iptal edilse de mesaj kaybolmaz.
+    user_content = (
+        [{"type": "image_url", "image_url": {"url": a["url"]}} for a in attachments]
+        + [{"type": "text", "text": message}]
+    ) if attachments else message
+    sess['history'].append({"role": "user", "content": user_content})
+    sess['history'].append({"role": "assistant", "content": ""})  # placeholder
+    save_conv_to_history(sess)
+    # history'deki son AI mesajının index'ini tut (sonradan güncellenecek)
+    ai_turn_index = len(sess['history']) - 1
 
     def generate():
         full_response = ""
         history_saved = False
-        local_conv_id = sess.get('active_local_conv_id')
 
-        if is_new_conv:
-            local_conv_id = make_local_conv_id()
-            sess['active_local_conv_id'] = local_conv_id
-            yield f"data: {json.dumps({'type': 'conv_id', 'conv_id': local_conv_id})}\n\n"
+        if new_local_conv_id:
+            yield f"data: {json.dumps({'type': 'conv_id', 'conv_id': new_local_conv_id})}\n\n"
 
         try:
             for event in stream_message(token, api_conv_id, api_message, model, [], attachments):
@@ -463,12 +480,9 @@ def api_send():
                             full_response += d.get('content', '')
                         elif d.get('type') == 'done':
                             fr = d.get('full_response', full_response)
-                            user_content = (
-                                [{"type": "image_url", "image_url": {"url": a["url"]}} for a in attachments]
-                                + [{"type": "text", "text": message}]
-                            ) if attachments else message
-                            sess['history'].append({"role": "user", "content": user_content})
-                            sess['history'].append({"role": "assistant", "content": fr})
+                            # Placeholder'ı gerçek yanıtla güncelle
+                            if ai_turn_index < len(sess['history']):
+                                sess['history'][ai_turn_index] = {"role": "assistant", "content": fr}
                             save_conv_to_history(sess)
                             history_saved = True
                         elif d.get('type') == 'billing':
@@ -479,17 +493,15 @@ def api_send():
         except GeneratorExit:
             pass
         finally:
-            if not history_saved and full_response:
-                user_content = (
-                    [{"type": "image_url", "image_url": {"url": a["url"]}} for a in attachments]
-                    + [{"type": "text", "text": message}]
-                ) if attachments else message
-                sess['history'].append({"role": "user", "content": user_content})
-                sess['history'].append({"role": "assistant", "content": full_response})
+            if not history_saved:
+                # Stream tamamlanmadan kesildi — placeholder'ı mevcut yanıtla güncelle
+                if ai_turn_index < len(sess['history']):
+                    sess['history'][ai_turn_index] = {"role": "assistant", "content": full_response}
                 save_conv_to_history(sess)
 
     return Response(generate(), mimetype='text/event-stream',
-                    headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
+                    headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no',
+                              'Connection': 'close'})
 
 
 @app.route('/api/upload', methods=['POST'])
