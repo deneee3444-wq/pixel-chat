@@ -257,12 +257,14 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
 .account-row{display:flex;align-items:center;gap:8px}
 .account-email{
   font-size:11.5px;color:var(--text2);line-height:1.4;flex:1;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;
+  display:flex;align-items:center;gap:5px;min-width:0;overflow:hidden;
+}
+.account-email-text{
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1;
 }
 .account-dot{
-  display:inline-block;width:6px;height:6px;border-radius:50%;
-  background:var(--success);margin-right:5px;vertical-align:middle;
-  animation:pulse-dot 2s infinite;flex-shrink:0;
+  display:inline-block;width:6px;height:6px;border-radius:50%;flex-shrink:0;
+  background:var(--success);animation:pulse-dot 2s infinite;
 }
 @keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.4}}
 
@@ -470,12 +472,14 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
 .input-box textarea{
   flex:1;background:none;border:none;outline:none;
   color:var(--text);font-size:14px;font-family:inherit;
-  line-height:1.5;resize:none;max-height:200px;
-  scrollbar-width:none;padding:0;
+  line-height:1.5;resize:none;max-height:100px;overflow-y:auto;
+  padding:0;padding-right:4px;
   display:block;min-height:21px;height:21px;
   vertical-align:middle;
 }
-.input-box textarea::-webkit-scrollbar{display:none}
+.input-box textarea::-webkit-scrollbar{width:4px}
+.input-box textarea::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.input-box textarea::-webkit-scrollbar-thumb:hover{background:var(--text3)}
 .input-box textarea::placeholder{color:var(--text3)}
 
 .input-actions{display:flex;align-items:center;gap:4px;flex-shrink:0}
@@ -570,14 +574,13 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
 
 /* ─── TOAST ─── */
 .toast-wrap{
-  position:fixed;top:20px;right:20px;left:20px;z-index:300;
+  position:fixed;top:16px;right:16px;z-index:300;
   display:flex;flex-direction:column;align-items:flex-end;gap:8px;pointer-events:none;
-  max-width:100vw;
 }
 .toast{
   background:var(--surface);border:1px solid var(--border);border-radius:10px;
-  padding:12px 16px;font-size:13px;color:var(--text2);
-  box-shadow:0 10px 30px rgba(0,0,0,.1);max-width:min(300px,100%);width:max-content;
+  padding:10px 14px;font-size:13px;color:var(--text2);
+  box-shadow:0 10px 30px rgba(0,0,0,.1);max-width:280px;width:max-content;
   animation:toast-in .25s ease;pointer-events:all;
   display:flex;align-items:flex-start;gap:8px;
   box-sizing:border-box;
@@ -590,8 +593,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
 .toast.warn{border-color:rgba(245,158,11,.3);color:var(--warn)}
 
 @media(max-width:768px){
-  .toast-wrap{top:12px;right:12px;left:12px}
-  .toast{max-width:100%;width:100%}
+  .toast-wrap{top:12px;right:12px}
 }
 
 /* ─── CHAT HEADER ─── */
@@ -737,7 +739,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
       <div class="account-label" id="accountLabel">Giriş Yapılmadı</div>
       <div class="account-row">
         <div class="account-email" id="accountEmail">
-          <span class="account-dot" id="accountDot"></span>Yükleniyor...
+          <span class="account-dot" id="accountDot"></span><span class="account-email-text">Yükleniyor...</span>
         </div>
         <button class="account-create-btn" id="createAccountBtn" onclick="quickCreateAccount()" title="Giriş Yap">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -861,10 +863,10 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
   <div class="modal">
     <span class="modal-icon">⚠️</span>
     <h2>Kredi Tükendi</h2>
-    <p>Bu hesabın kredisi bitti. Sohbet geçmişiniz taşınarak yeni hesap oluşturulacak.</p>
+    <p>Bu hesabın kredisi bitti. Sohbet geçmişiniz taşınarak yeni bir hesaba giriş yapılacak.</p>
     <div class="modal-btns">
       <button class="btn-secondary" onclick="closeModal('creditModal')">Kapat</button>
-      <button class="btn-primary" id="creditResetBtn" onclick="resetFromCredit()">Yeni Hesap Aç</button>
+      <button class="btn-primary" id="creditResetBtn" onclick="resetFromCredit()">Yeniden Giriş Yap</button>
     </div>
   </div>
 </div>
@@ -1051,13 +1053,13 @@ function updateSidebar() {
   const emailEl = document.getElementById('accountEmail');
   if (S.accountCreated && S.email) {
     labelEl.textContent = 'Giriş Yapıldı';
-    emailEl.innerHTML = `<span class="account-dot" style="background:var(--success);animation:pulse-dot 2s infinite"></span>${S.email}`;
+    emailEl.innerHTML = `<span class="account-dot" style="background:var(--success);animation:pulse-dot 2s infinite"></span><span class="account-email-text">${S.email}</span>`;
   } else if (S.accountCreated) {
     labelEl.textContent = 'Giriş Yapıldı';
-    emailEl.innerHTML = `<span class="account-dot" style="background:var(--success);animation:pulse-dot 2s infinite"></span>Hesap aktif`;
+    emailEl.innerHTML = `<span class="account-dot" style="background:var(--success);animation:pulse-dot 2s infinite"></span><span class="account-email-text">Hesap aktif</span>`;
   } else {
     labelEl.textContent = 'Giriş Yapılmadı';
-    emailEl.innerHTML = `<span class="account-dot" style="background:var(--text3);animation:none"></span>Giriş bekleniyor`;
+    emailEl.innerHTML = `<span class="account-dot" style="background:var(--text3);animation:none"></span><span class="account-email-text">Giriş bekleniyor</span>`;
   }
   document.getElementById('topbarModel').textContent = modelLabel(S.model);
   renderModelPicker();
@@ -1282,7 +1284,7 @@ async function sendMessage() {
   if (!msg) return;
 
   if (!S.accountCreated) {
-    toast('Önce sol alttan bir hesap oluşturun', 'warn');
+    toast('Önce sol alttan giriş yapın', 'warn');
     return;
   }
 
@@ -1304,6 +1306,7 @@ async function sendMessage() {
 
   let full = '';
   let textNode = aiEl.querySelector('.msg-text');
+  let postAction = null;
 
   try {
     const resp = await fetch('/api/send', {
@@ -1331,6 +1334,7 @@ async function sendMessage() {
     const dec = new TextDecoder();
     let buf = '';
 
+    let terminal = false;
     while(true) {
       const {done, value} = await reader.read();
       if (done) break;
@@ -1364,6 +1368,7 @@ async function sendMessage() {
             updateSidebar();
             // Refresh conv list to show new/updated conversation
             await refreshConversations();
+            terminal = true;
           } else if (d.type === 'stream_interrupted') {
             // Akış kesildi — geçmişe kısmı kaydedildi, "Devam et" gerekli
             if (d.full_response || full) {
@@ -1372,65 +1377,30 @@ async function sendMessage() {
               updateSidebar();
               await refreshConversations();
             }
-            const pendingAttsSnap = [...atts];
-            if (isAutoMode()) {
-              addSystemLog('⚠️ Akış kesildi — "Devam et" otomatik gönderiliyor.');
-              // Arkaplanda yeni konuşmaya geç (locked mantığı gibi), "Devam et" gönder
-              await doAutoNewChatBackground('Devam et', pendingAttsSnap);
-            } else {
-              addSystemLogWithAction(
-                '⚠️ Akış kesildi — cevap tamamlanmadı.',
-                'Devam et',
-                async () => { await doNewChatBackground('Devam et', pendingAttsSnap); }
-              );
-              // Prompt'a da koy
-              const inp = document.getElementById('msgInput');
-              if (!inp.value.trim()) {
-                inp.value = 'Devam et';
-                autoResize(inp);
-                inp.focus();
-              }
-            }
+            postAction = { kind: 'interrupted', pendingAtts: [...atts] };
+            terminal = true;
           } else if (d.type === 'error') {
             if (d.code === 'LOCKED') {
               // 423 - Konuşma kilitlendi
               aiEl.remove();
-              if (isAutoMode()) {
-                addSystemLog(`⚠️ 423 Locked — Arkaplanda yeni konuşma açılıyor.`);
-                markUserMsgFailed();
-                await doAutoNewChatBackground(msg, atts);
-              } else {
-                addSystemLogWithAction(
-                  '⚠️ 423 Locked — Bu konuşma kilitlendi.',
-                  'Yeni Sohbet Başlat',
-                  async () => { await doNewChatBackground(msg, atts); }
-                );
-                markUserMsgFailed();
-                restorePrompt(msg);
-              }
+              postAction = { kind: 'locked', pendingMsg: msg, pendingAtts: atts };
             } else if (d.code === 'INSUFFICIENT_CREDITS') {
               // 402 - Kredi tükendi
               renderMarkdown(textNode, full || '', false);
-              if (isAutoMode()) {
-                addSystemLog(`⚠️ 402 Kredi tükendi — Arkaplanda yeni hesap açılıyor...`);
-                markUserMsgFailed();
-                await doAutoNewAccount(msg, atts);
-              } else {
-                addSystemLogWithAction(
-                  '⚠️ 402 Kredi tükendi.',
-                  'Yeni Hesap Aç',
-                  async () => { await doManualNewAccount(msg, atts); }
-                );
-                markUserMsgFailed();
-                restorePrompt(msg);
-              }
+              postAction = { kind: 'credits', pendingMsg: msg, pendingAtts: atts };
             } else {
               textNode.innerHTML = `<span style="color:var(--error)">Hata: ${d.code}</span>`;
               markUserMsgFailed();
               restorePrompt(msg);
             }
+            terminal = true;
           }
         } catch {}
+        if (terminal) break;
+      }
+      if (terminal) {
+        try { await reader.cancel(); } catch {}
+        break;
       }
     }
   } catch(e) {
@@ -1440,6 +1410,8 @@ async function sendMessage() {
       } else {
         aiEl.remove();
       }
+      // İptal sonrası conv kaydedildi (backend), listeyi güncelle
+      await refreshConversations();
     } else {
       textNode.innerHTML = `<span style="color:var(--error)">Bağlantı hatası: ${e.message}</span>`;
       markUserMsgFailed();
@@ -1450,6 +1422,59 @@ async function sendMessage() {
     setSendDisabled(false);
     scrollBottom();
     document.getElementById('msgInput').focus();
+  }
+
+  // Stream tamamen bitti ve state sıfırlandı (S.streaming=false).
+  // Olası recovery aksiyonlarını ANCAK şimdi, dış sendMessage çağrısı
+  // tamamen kapandıktan sonra çalıştırıyoruz — bu, iç içe sendMessage()
+  // çağrılarının dış finally tarafından state'inin ezilmesini önler.
+  if (postAction) {
+    if (postAction.kind === 'interrupted') {
+      if (isAutoMode()) {
+        addSystemLog('⚠️ Akış kesildi — "Devam et" otomatik gönderiliyor.');
+        await doAutoNewChatBackground('Devam et', postAction.pendingAtts);
+      } else {
+        addSystemLogWithAction(
+          '⚠️ Akış kesildi — cevap tamamlanmadı.',
+          'Devam et',
+          async () => { await doNewChatBackground('Devam et', postAction.pendingAtts); }
+        );
+        const inp = document.getElementById('msgInput');
+        if (!inp.value.trim()) {
+          inp.value = 'Devam et';
+          autoResize(inp);
+          inp.focus();
+        }
+      }
+    } else if (postAction.kind === 'locked') {
+      if (isAutoMode()) {
+        addSystemLog(`⚠️ 423 Locked — Arkaplanda yeni konuşma açılıyor.`);
+        markUserMsgFailed();
+        await doAutoNewChatBackground(postAction.pendingMsg, postAction.pendingAtts);
+      } else {
+        addSystemLogWithAction(
+          '⚠️ 423 Locked — Bu konuşma kilitlendi.',
+          'Yeni Sohbet Başlat',
+          async () => { await doNewChatBackground(postAction.pendingMsg, postAction.pendingAtts); }
+        );
+        markUserMsgFailed();
+        restorePrompt(postAction.pendingMsg);
+      }
+    } else if (postAction.kind === 'credits') {
+      if (isAutoMode()) {
+        addSystemLog(`⚠️ 402 Kredi tükendi — Arkaplanda giriş yapılıyor...`);
+        markUserMsgFailed();
+        await doAutoNewAccount(postAction.pendingMsg, postAction.pendingAtts);
+      } else {
+        addSystemLogWithAction(
+          '⚠️ 402 Kredi tükendi.',
+          'Yeniden Giriş Yap',
+          async () => { await doManualNewAccount(postAction.pendingMsg, postAction.pendingAtts); }
+        );
+        markUserMsgFailed();
+        restorePrompt(postAction.pendingMsg);
+      }
+    }
   }
 }
 
@@ -1493,11 +1518,24 @@ function appendMessage(role, text, images=[], streaming=false) {
   `;
 
   const textEl = el.querySelector('.msg-text');
-  if (text) renderMarkdown(textEl, text, streaming);
+  if (text) {
+    if (role === 'user') renderPlainText(textEl, text);
+    else renderMarkdown(textEl, text, streaming);
+  }
   else if (streaming) textEl.innerHTML = '<div class="typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>';
 
   inner.appendChild(el);
   return el;
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function renderPlainText(el, text) {
+  el.innerHTML = escapeHtml(text || '').replace(/\n/g, '<br>');
 }
 
 function renderMarkdown(el, text, streaming=false) {
@@ -1664,7 +1702,7 @@ async function doReset(carry, modalId, btnId) {
   btn.textContent = 'Yükleniyor...';
 
   const statusInterval = setInterval(() => {
-    const msgs = ['Hesap oluşturuluyor...','Mail bekleniyor...','Giriş yapılıyor...'];
+    const msgs = ['Giriş yapılıyor...','Mail bekleniyor...','Oturum açılıyor...'];
     const idx = Math.floor(Date.now()/4000) % msgs.length;
     btn.textContent = msgs[idx];
   }, 4000);
@@ -1693,7 +1731,7 @@ async function doReset(carry, modalId, btnId) {
         S.activeConvId = d.new_conv_id;
       }
       await refreshConversations();
-      toast(`Yeni hesap: ${d.email}`, 'success');
+      toast(`Hesap değiştirildi`, 'success');
     } else {
       toast(d.error || 'Sıfırlama başarısız', 'error');
     }
@@ -1702,7 +1740,7 @@ async function doReset(carry, modalId, btnId) {
     toast('Bağlantı hatası: ' + e.message, 'error');
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Yeni Hesap Aç';
+    btn.textContent = 'Yeniden Giriş Yap';
   }
 }
 
@@ -1729,9 +1767,9 @@ async function quickCreateAccount() {
       // arka planda yeni hesaba taşıdı.
       updateSidebar();
       await refreshConversations();
-      toast(`Yeni hesap oluşturuldu ✓`, 'success');
+      toast(`Giriş yapıldı`, 'success');
     } else {
-      toast(d.error || 'Hesap oluşturulamadı', 'error');
+      toast(d.error || 'Giriş yapılamadı', 'error');
     }
   } catch(e) {
     toast('Bağlantı hatası', 'error');
@@ -1847,7 +1885,7 @@ function setSendDisabled(d) {
 
 function autoResize(el) {
   el.style.height = '21px';
-  el.style.height = Math.min(el.scrollHeight, 200) + 'px';
+  el.style.height = Math.min(el.scrollHeight, 100) + 'px';
 }
 
 // ─── marked config ─────────────────────────────────────────────────────
@@ -2078,7 +2116,7 @@ async function doAutoNewChatBackground(pendingMsg, pendingAtts) {
 // Yeni hesap aç, mesajı prompt'a geri koy — otomatik gönderme
 async function doManualNewAccount(pendingMsg, pendingAtts) {
   try {
-    addSystemLog('⏳ Yeni hesap oluşturuluyor...');
+    addSystemLog('⏳ Giriş yapılıyor...');
     const r = await fetch('/api/reset', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({carry_history: true, conv_id: S.activeConvId || null})
@@ -2091,14 +2129,14 @@ async function doManualNewAccount(pendingMsg, pendingAtts) {
       if (d.new_conv_id) S.activeConvId = d.new_conv_id;
       updateSidebar();
       await refreshConversations();
-      addSystemLog(`✓ Yeni hesap: ${d.email} — mesajınızı göndermek için butona basın.`);
+      addSystemLog(`✓ Giriş yapıldı: ${d.email} — mesajınızı göndermek için butona basın.`);
       S.pendingAtts = pendingAtts || [];
       renderAttachPreview();
       S.streaming = false;
       setSendDisabled(false);
       restorePrompt(pendingMsg);
     } else {
-      addSystemLog('Yeni hesap oluşturulamadı: ' + (d.error || 'bilinmeyen hata'));
+      addSystemLog('Giriş yapılamadı: ' + (d.error || 'bilinmeyen hata'));
       restorePrompt(pendingMsg);
     }
   } catch(e) {
@@ -2111,7 +2149,7 @@ async function doManualNewAccount(pendingMsg, pendingAtts) {
 // Yeni hesap aç, mevcut chat sayfasında kal, mesajı yeniden gönder
 async function doAutoNewAccount(pendingMsg, pendingAtts) {
   try {
-    addSystemLog('⏳ Yeni hesap oluşturuluyor...');
+    addSystemLog('⏳ Giriş yapılıyor...');
     const r = await fetch('/api/reset', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({carry_history: true, conv_id: S.activeConvId || null})
@@ -2124,7 +2162,7 @@ async function doAutoNewAccount(pendingMsg, pendingAtts) {
       if (d.new_conv_id) S.activeConvId = d.new_conv_id;
       updateSidebar();
       await refreshConversations();
-      addSystemLog(`✓ Yeni hesap: ${d.email} — mesajınız yeniden gönderiliyor...`);
+      addSystemLog(`✓ Giriş yapıldı: ${d.email} — mesajınız yeniden gönderiliyor...`);
       const input = document.getElementById('msgInput');
       input.value = pendingMsg;
       S.pendingAtts = pendingAtts || [];
@@ -2133,7 +2171,7 @@ async function doAutoNewAccount(pendingMsg, pendingAtts) {
       setSendDisabled(false);
       await sendMessage();
     } else {
-      addSystemLog('Yeni hesap oluşturulamadı: ' + (d.error || 'bilinmeyen hata'));
+      addSystemLog('Giriş yapılamadı: ' + (d.error || 'bilinmeyen hata'));
       restorePrompt(pendingMsg);
     }
   } catch(e) {
