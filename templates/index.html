@@ -460,7 +460,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
 .att-chip button:hover{color:var(--error)}
 
 .input-box{
-  display:flex;align-items:center;gap:8px;
+  display:flex;align-items:flex-end;gap:8px;
   background:var(--surface);border:1px solid var(--border);
   border-radius:14px;padding:8px 10px 8px 14px;
   transition:border-color .2s,box-shadow .2s;
@@ -472,17 +472,16 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
 .input-box textarea{
   flex:1;background:none;border:none;outline:none;
   color:var(--text);font-size:14px;font-family:inherit;
-  line-height:1.5;resize:none;max-height:100px;overflow-y:auto;
-  padding:0;padding-right:4px;
+  line-height:1.5;resize:none;max-height:120px;overflow-y:auto;
+  padding:0;padding-right:4px;margin-bottom:7px;
   display:block;min-height:21px;height:21px;
-  vertical-align:middle;
 }
 .input-box textarea::-webkit-scrollbar{width:4px}
 .input-box textarea::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
 .input-box textarea::-webkit-scrollbar-thumb:hover{background:var(--text3)}
 .input-box textarea::placeholder{color:var(--text3)}
 
-.input-actions{display:flex;align-items:center;gap:4px;flex-shrink:0}
+.input-actions{display:flex;align-items:center;gap:4px;flex-shrink:0;align-self:flex-end}
 .icon-btn{
   width:34px;height:34px;border-radius:9px;border:none;
   background:none;cursor:pointer;color:var(--text3);
@@ -1295,6 +1294,12 @@ async function sendMessage() {
   S.pendingAtts = [];
   document.getElementById('attachPreview').innerHTML = '';
 
+  // Sunucuya gönderilecek tam geçmiş — ekrandaki en son haliyle (kesintiye uğramış
+  // yarım cevaplar dahil) DOM'dan alınır. Böylece bağlantı koptuğunda backend'in
+  // kendi geçmiş kaydı eksik/güncel olmasa bile, istemci tarafı her zaman ekranda
+  // ne görünüyorsa onu history olarak yollar.
+  const priorHistory = getHistoryData();
+
   hideEmpty();
   appendMessage('user', msg, atts.map(a=>a.url));
   const aiEl = appendMessage('ai', '', [], true);
@@ -1315,7 +1320,8 @@ async function sendMessage() {
       body: JSON.stringify({
         message: msg,
         attachments: atts.map(a=>({url:a.url,type:a.type})),
-        conv_id: S.activeConvId || null
+        conv_id: S.activeConvId || null,
+        history: priorHistory
       })
     });
 
@@ -1412,6 +1418,13 @@ async function sendMessage() {
       }
       // İptal sonrası conv kaydedildi (backend), listeyi güncelle
       await refreshConversations();
+    } else if (full) {
+      // Gerçek bağlantı kopması (network kesintisi) ama akıştan bir miktar
+      // cevap geldi — abort durumundaki gibi davran: kısmi cevabı koru ve
+      // "Devam et" akışını (oto/manuel) tetikle. priorHistory zaten bu kısmi
+      // cevabı da içerecek şekilde bir sonraki gönderimde sunucuya gidecek.
+      renderMarkdown(textNode, full, false);
+      postAction = { kind: 'interrupted', pendingAtts: [...atts] };
     } else {
       textNode.innerHTML = `<span style="color:var(--error)">Bağlantı hatası: ${e.message}</span>`;
       markUserMsgFailed();
@@ -1434,11 +1447,7 @@ async function sendMessage() {
         addSystemLog('⚠️ Akış kesildi — "Devam et" otomatik gönderiliyor.');
         await doAutoNewChatBackground('Devam et', postAction.pendingAtts);
       } else {
-        addSystemLogWithAction(
-          '⚠️ Akış kesildi — cevap tamamlanmadı.',
-          'Devam et',
-          async () => { await doNewChatBackground('Devam et', postAction.pendingAtts); }
-        );
+        addSystemLog('⚠️ Akış kesildi — cevap tamamlanmadı.');
         const inp = document.getElementById('msgInput');
         if (!inp.value.trim()) {
           inp.value = 'Devam et';
@@ -1885,7 +1894,7 @@ function setSendDisabled(d) {
 
 function autoResize(el) {
   el.style.height = '21px';
-  el.style.height = Math.min(el.scrollHeight, 100) + 'px';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
 }
 
 // ─── marked config ─────────────────────────────────────────────────────
