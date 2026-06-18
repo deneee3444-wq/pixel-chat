@@ -82,6 +82,7 @@ def new_sess(sid):
         'conversations': [],          # [{'conv_id', 'api_conv_id'|None, 'title', 'history'}]
         'active_local_conv_id': None,
         'pending_context': None,      # eski konuşmadan taşınan bağlam (bir sonraki mesaja gömülecek)
+        'last_turn_interrupted': False,  # önceki AI cevabı tam bitmeden kesildi mi
     }
     return _sessions[sid]
 
@@ -129,6 +130,34 @@ def format_history_context(history):
 
     header = json.dumps(context_obj, ensure_ascii=False)
     return f"{header}\n\nKullanıcının asıl/yeni mesajı:"
+
+
+def normalize_client_history(raw_history):
+    """
+    İstemciden (frontend, ekrandaki DOM'dan) gelen history listesini
+    ([{'role','text','images'}, ...]) backend'in kullandığı iç formata
+    ([{'role','content'}, ...]) çevirir. Geçersiz/boşsa [] döner.
+    """
+    result = []
+    if not isinstance(raw_history, list):
+        return result
+    for turn in raw_history:
+        if not isinstance(turn, dict):
+            continue
+        role = turn.get('role')
+        if role not in ('user', 'assistant'):
+            continue
+        text_val = turn.get('text') or ''
+        images   = turn.get('images') or []
+        if images:
+            content = [{"type": "image_url", "image_url": {"url": u}} for u in images]
+            if text_val:
+                content.append({"type": "text", "text": text_val})
+        else:
+            content = text_val
+        result.append({"role": role, "content": content})
+    return result
+
 
 def make_local_conv_id():
     return 'conv_' + uuid.uuid4().hex[:12]
@@ -408,9 +437,10 @@ def api_send():
     if not sess or not sess.get('token'):
         return jsonify({'error': 'Oturum bulunamadı.'}), 401
 
-    data        = request.json or {}
-    message     = data.get('message', '').strip()
-    attachments = data.get('attachments', [])
+    data           = request.json or {}
+    message        = data.get('message', '').strip()
+    attachments    = data.get('attachments', [])
+    client_history = data.get('history')   # istemcinin (DOM/ekran) tam geçmişi
 
     if not message:
         return jsonify({'error': 'Mesaj boş.'}), 400
@@ -418,6 +448,15 @@ def api_send():
     token       = sess['token']
     api_conv_id = sess['api_conv_id']
     model       = sess['model']
+
+    # Önceki tur (bağlantı kopması / akış kesilmesi yüzünden) tamamlanamadıysa,
+    # bir sonraki gönderimde bunu bağlam olarak yeniden gömeceğiz.
+    was_interrupted = sess.pop('last_turn_interrupted', False)
+
+    # Bağlam yeniden gömülecekse: önce istemciden gelen ekran geçmişini kullan
+    # (en güncel/doğru hal — kesintiye uğramış yarım cevap dahil tüm ekranı
+    # yansıtır), yoksa kendi kaydımıza düş.
+    recovery_history = normalize_client_history(client_history) or sess.get('history', [])
 
     is_scratch = (
         api_conv_id == sess.get('scratch_api_conv_id')
@@ -429,7 +468,7 @@ def api_send():
         # yabancı local konuşma tarafından kullanılıyor. Bu yüzden bu konuşmanın
         # TAM geçmişini HER mesajda yeniden gömüyoruz; ekranda kullanıcıya
         # yalnızca kendi yazdığı mesaj görünür.
-        ctx = format_history_context(sess.get('history', []))
+        ctx = format_history_context(recovery_history)
         api_message = f"{ctx}\n{message}" if ctx else message
     else:
         # Ana (primary) conversation — server kendi geçmişini hatırlıyor.
@@ -438,6 +477,14 @@ def api_send():
         pending_context = sess.pop('pending_context', None)
         if pending_context:
             api_message = f"{pending_context}\n{message}"
+        elif was_interrupted:
+            # Önceki AI cevabı bağlantı kopması / akış kesilmesi yüzünden
+            # tamamlanamadı. Üçüncü parti servisin bu conversation_id için
+            # hafızası eksik kalmış olabilir — bilinen TAM geçmişi (öncelik
+            # istemciden gelen ekran haline) bağlam olarak yeniden gömüp
+            # modele hatırlatıyoruz.
+            ctx = format_history_context(recovery_history)
+            api_message = f"{ctx}\n{message}" if ctx else message
         else:
             api_message = message
 
@@ -498,6 +545,13 @@ def api_send():
                 if ai_turn_index < len(sess['history']):
                     sess['history'][ai_turn_index] = {"role": "assistant", "content": full_response}
                 save_conv_to_history(sess)
+                # Bu turun kesintiye uğradığını işaretle — bir sonraki /api/send
+                # isteğinde bilinen TAM geçmiş, üçüncü parti servise bağlam
+                # olarak yeniden gömülecek (onun bu conversation_id için
+                # hafızası eksik/güncel olmayabileceği için).
+                sess['last_turn_interrupted'] = True
+            else:
+                sess['last_turn_interrupted'] = False
 
     return Response(generate(), mimetype='text/event-stream',
                     headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no',
@@ -560,6 +614,7 @@ def api_new_chat():
     sess['history'] = []
     sess['active_local_conv_id'] = None
     sess['pending_context'] = None
+    sess['last_turn_interrupted'] = False
 
     api_conv_id = create_conversation(sess['token'], sess['user_id'], sess['model'])
     if not api_conv_id:
@@ -703,6 +758,7 @@ def api_clear():
     sess['history'] = []
     sess['active_local_conv_id'] = None
     sess['pending_context'] = None
+    sess['last_turn_interrupted'] = False
     api_conv_id = create_conversation(sess['token'], sess['user_id'], sess['model'])
     if api_conv_id:
         sess['api_conv_id']         = api_conv_id
@@ -795,6 +851,7 @@ def _switch_to_conv(sess, conv_id):
 
             sess['history']              = history
             sess['active_local_conv_id'] = conv_id
+            sess['last_turn_interrupted'] = False
             return True, conv_id, len(history) // 2
 
     return False, None, 0
