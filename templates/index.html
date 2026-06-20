@@ -241,15 +241,18 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
 .switch input:checked + .slider:before{transform:translateX(16px)}
 
 /* ─── USE IN PROMPT ARROW ─── */
+.msg-avatar-col{display:flex;flex-shrink:0}
+.msg{position:relative}
 .msg-use-btn{
-  display:none;align-items:center;justify-content:center;
-  position:absolute;top:4px;right:0;
+  display:flex;align-items:center;justify-content:center;
+  position:absolute;left:4px;bottom:4px;
   width:24px;height:24px;border-radius:6px;border:none;
   background:var(--surface2);color:var(--text3);cursor:pointer;
-  font-size:13px;transition:background .15s,color .15s;
-  opacity:.7;
+  font-size:13px;transition:background .15s,color .15s,opacity .15s;
+  opacity:0;pointer-events:none;
 }
-.msg:hover .msg-use-btn{display:flex}
+.msg.user .msg-use-btn{left:auto;right:4px}
+.msg:hover .msg-use-btn{opacity:.7;pointer-events:auto}
 .msg-use-btn:hover{background:var(--accent-dim);color:var(--accent);opacity:1}
 .msg-body{position:relative}
 
@@ -314,8 +317,8 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
 }
 
 .msg{
-  display:flex;gap:14px;padding:6px 0;
-  animation:msg-in .2s ease;min-width:0;overflow:hidden;
+  display:flex;gap:14px;padding:6px 0 32px;
+  animation:msg-in .2s ease;min-width:0;overflow:visible;
 }
 @keyframes msg-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 
@@ -332,6 +335,15 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
 .msg-role.user{color:rgba(217,119,87,.8)}
 .failed-badge{font-size:10px;font-weight:400;opacity:.85;display:inline-flex;align-items:center;gap:2px;color:var(--error);white-space:nowrap;flex-shrink:0;margin-left:auto}
 .msg-role.ai{color:var(--text3)}
+
+/* Sağlı-sollu (chat bubble) layout: user messages on the right, AI stays on the left */
+.msg.user{justify-content:flex-end}
+.msg.user .msg-avatar-col{order:2}
+.msg.user .msg-body{order:1;flex:0 1 auto;max-width:92%}
+.msg.user .msg-role{justify-content:flex-end}
+.msg.user .msg-text{text-align:right}
+.msg.user .msg-images{justify-content:flex-end}
+.msg.ai .msg-body{max-width:92%}
 
 .msg-text{color:var(--text);line-height:1.7;word-wrap:break-word;overflow-wrap:break-word;min-width:0}
 .msg-text p{margin-bottom:12px}
@@ -1501,11 +1513,11 @@ function hideEmpty() {
 function appendMessage(role, text, images=[], streaming=false) {
   const inner = document.getElementById('messagesInner');
   const el = document.createElement('div');
-  el.className = 'msg';
 
   const avatarLabel = role === 'user' ? '👤' : '🐰';
   const roleLabel = role === 'user' ? 'Sen' : 'PixelBunny';
   const roleClass = role === 'user' ? 'user' : 'ai';
+  el.className = `msg ${roleClass}`;
 
   let imgsHtml = '';
   if (images && images.length) {
@@ -1513,14 +1525,16 @@ function appendMessage(role, text, images=[], streaming=false) {
   }
 
   el.innerHTML = `
-    <div class="msg-avatar ${roleClass}">${avatarLabel}</div>
+    <div class="msg-avatar-col">
+      <div class="msg-avatar ${roleClass}">${avatarLabel}</div>
+      <button class="msg-use-btn" title="Prompt'a aktar" onclick="useInPrompt(this)">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 10 20 15 15 20"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/></svg>
+      </button>
+    </div>
     <div class="msg-body">
       <div class="msg-role ${roleClass}">${roleLabel}</div>
       <div class="msg-text"></div>
       ${imgsHtml}
-      <button class="msg-use-btn" title="Prompt'a aktar" onclick="useInPrompt(this)">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 10 20 15 15 20"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/></svg>
-      </button>
     </div>
   `;
 
@@ -2024,7 +2038,7 @@ function markUserMsgFailed() {
         const badge = document.createElement('span');
         badge.className = 'failed-badge';
         badge.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:middle;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> gönderilemedi';
-        roleEl.appendChild(badge);
+        roleEl.prepend(badge);
       }
       break;
     }
@@ -2042,8 +2056,8 @@ function restorePrompt(msg) {
 
 // ─── USE IN PROMPT ────────────────────────────────────────────────────
 function useInPrompt(btn) {
-  const msgBody = btn.closest('.msg-body');
-  const textEl = msgBody.querySelector('.msg-text');
+  const msg = btn.closest('.msg');
+  const textEl = msg.querySelector('.msg-text');
   const text = textEl ? (textEl.innerText || textEl.textContent || '').trim() : '';
   if (!text) return;
   const input = document.getElementById('msgInput');
