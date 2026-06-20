@@ -479,7 +479,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
 .input-box textarea::-webkit-scrollbar{width:4px}
 .input-box textarea::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
 .input-box textarea::-webkit-scrollbar-thumb:hover{background:var(--text3)}
-.input-box textarea::placeholder{color:var(--text3)}
+.input-box textarea::placeholder{color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 .input-actions{display:flex;align-items:center;gap:4px;flex-shrink:0;align-self:flex-end}
 .icon-btn{
@@ -688,6 +688,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
   .msg-images img{max-width:min(200px,60vw)}
   .setup-card{padding:32px 24px}
   .modal{padding:24px 20px}
+  .model-picker-btn{max-width:88px}
 }
 </style>
 </head>
@@ -1044,7 +1045,6 @@ async function initSession() {
 function enterApp() {
   document.getElementById('setupOverlay').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
-  document.getElementById('msgInput').focus();
 }
 
 function updateSidebar() {
@@ -1434,7 +1434,6 @@ async function sendMessage() {
     S.streaming = false;
     setSendDisabled(false);
     scrollBottom();
-    document.getElementById('msgInput').focus();
   }
 
   // Stream tamamen bitti ve state sıfırlandı (S.streaming=false).
@@ -1452,7 +1451,6 @@ async function sendMessage() {
         if (!inp.value.trim()) {
           inp.value = 'Devam et';
           autoResize(inp);
-          inp.focus();
         }
       }
     } else if (postAction.kind === 'locked') {
@@ -1894,8 +1892,13 @@ function setSendDisabled(d) {
 
 function autoResize(el) {
   el.style.height = '21px';
+  void el.offsetHeight; // force reflow so scrollHeight reflects the current width/content, not a stale value
   el.style.height = Math.min(el.scrollHeight, 120) + 'px';
 }
+window.addEventListener('resize', () => {
+  const ta = document.getElementById('msgInput');
+  if (ta) autoResize(ta);
+});
 
 // ─── marked config ─────────────────────────────────────────────────────
 marked.setOptions({
@@ -2034,7 +2037,6 @@ function restorePrompt(msg) {
   if (msg && !input.value.trim()) {
     input.value = msg;
     autoResize(input);
-    input.focus();
   }
 }
 
