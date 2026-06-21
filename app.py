@@ -81,8 +81,6 @@ def new_sess(sid):
         'total_cost': 0.0,
         'conversations': [],          # [{'conv_id', 'api_conv_id'|None, 'title', 'history'}]
         'active_local_conv_id': None,
-        'pending_context': None,      # eski konuşmadan taşınan bağlam (bir sonraki mesaja gömülecek)
-        'last_turn_interrupted': False,  # önceki AI cevabı tam bitmeden kesildi mi
     }
     return _sessions[sid]
 
@@ -288,7 +286,7 @@ def create_conversation(token, user_id, model_id):
 
 
 # ===================== CHAT STREAM =====================
-def stream_message(token, api_conv_id, message, model_id, history=None, attachments=None):
+def stream_message(token, api_conv_id, message, model_id, history=None, attachments=None, sess=None):
     """
     history: konuşma bağlamı — Supabase bu parametreyi alıp modele geçiriyor.
     Yeni hesapta bile history göndererek eski konuşma bağlamı korunur.
@@ -317,6 +315,8 @@ def stream_message(token, api_conv_id, message, model_id, history=None, attachme
             f"{BASE_URL}/functions/v1/chat-completion",
             headers=headers, json=payload, stream=True, timeout=120
         ) as res:
+            if sess is not None:
+                sess['active_stream_response'] = res
             res.encoding = "utf-8"
             if res.status_code == 423:
                 yield f"data: {json.dumps({'type': 'error', 'code': 'LOCKED'})}\n\n"
@@ -329,7 +329,13 @@ def stream_message(token, api_conv_id, message, model_id, history=None, attachme
                 return
 
             done_received = False
+            aborted_time = None
             for raw_line in res.iter_lines(decode_unicode=True, chunk_size=1):
+                if sess and sess.get('aborted'):
+                    if aborted_time is None:
+                        aborted_time = time.time()
+                    elif time.time() - aborted_time > 1.5:
+                        break
                 if raw_line is None:
                     continue
                 line = raw_line.strip()
@@ -354,7 +360,8 @@ def stream_message(token, api_conv_id, message, model_id, history=None, attachme
                         content = choices[0].get("delta", {}).get("content", "")
                         if content:
                             full_response += content
-                            yield f"data: {json.dumps({'type': 'chunk', 'content': content})}\n\n"
+                            if not (sess and sess.get('aborted')):
+                                yield f"data: {json.dumps({'type': 'chunk', 'content': content})}\n\n"
                 except json.JSONDecodeError:
                     pass
 
@@ -371,6 +378,9 @@ def stream_message(token, api_conv_id, message, model_id, history=None, attachme
             yield f"data: {json.dumps({'type': 'stream_interrupted', 'full_response': full_response})}\n\n"
         else:
             yield f"data: {json.dumps({'type': 'error', 'code': str(e)})}\n\n"
+    finally:
+        if sess is not None:
+            sess.pop('active_stream_response', None)
 
 
 # ===================== ROUTES =====================
@@ -437,10 +447,11 @@ def api_send():
     if not sess or not sess.get('token'):
         return jsonify({'error': 'Oturum bulunamadı.'}), 401
 
+    sess['aborted'] = False
+
     data           = request.json or {}
     message        = data.get('message', '').strip()
     attachments    = data.get('attachments', [])
-    client_history = data.get('history')   # istemcinin (DOM/ekran) tam geçmişi
 
     if not message:
         return jsonify({'error': 'Mesaj boş.'}), 400
@@ -449,44 +460,14 @@ def api_send():
     api_conv_id = sess['api_conv_id']
     model       = sess['model']
 
-    # Önceki tur (bağlantı kopması / akış kesilmesi yüzünden) tamamlanamadıysa,
-    # bir sonraki gönderimde bunu bağlam olarak yeniden gömeceğiz.
-    was_interrupted = sess.pop('last_turn_interrupted', False)
-
-    # Bağlam yeniden gömülecekse: önce istemciden gelen ekran geçmişini kullan
-    # (en güncel/doğru hal — kesintiye uğramış yarım cevap dahil tüm ekranı
-    # yansıtır), yoksa kendi kaydımıza düş.
-    recovery_history = normalize_client_history(client_history) or sess.get('history', [])
-
-    is_scratch = (
-        api_conv_id == sess.get('scratch_api_conv_id')
-        and api_conv_id != sess.get('primary_api_conv_id')
-    )
-
-    if is_scratch:
-        # Paylaşılan "scratch" conversation — bu conversation_id birden fazla
-        # yabancı local konuşma tarafından kullanılıyor. Bu yüzden bu konuşmanın
-        # TAM geçmişini HER mesajda yeniden gömüyoruz; ekranda kullanıcıya
-        # yalnızca kendi yazdığı mesaj görünür.
-        ctx = format_history_context(recovery_history)
-        api_message = f"{ctx}\n{message}" if ctx else message
+    # Önceki geçmişi mesajın içine göm (her zaman — Pixel Bunny history
+    # parametresi boş gönderilir, tüm bağlam mesaj içinde taşınır).
+    prior_history = sess.get('history', [])
+    if prior_history:
+        ctx = format_history_context(prior_history)
+        api_message = f"{ctx}\n{message}"
     else:
-        # Ana (primary) conversation — server kendi geçmişini hatırlıyor.
-        # Eğer hesap sıfırlanırken bir konuşma buraya taşındıysa (carry),
-        # bu geçmiş bir kerelik bağlam olarak gömülür.
-        pending_context = sess.pop('pending_context', None)
-        if pending_context:
-            api_message = f"{pending_context}\n{message}"
-        elif was_interrupted:
-            # Önceki AI cevabı bağlantı kopması / akış kesilmesi yüzünden
-            # tamamlanamadı. Üçüncü parti servisin bu conversation_id için
-            # hafızası eksik kalmış olabilir — bilinen TAM geçmişi (öncelik
-            # istemciden gelen ekran haline) bağlam olarak yeniden gömüp
-            # modele hatırlatıyoruz.
-            ctx = format_history_context(recovery_history)
-            api_message = f"{ctx}\n{message}" if ctx else message
-        else:
-            api_message = message
+        api_message = message
 
     # Yeni konuşmayı generate() içinde değil, burada (request başında) oluştur.
     # Böylece istemci ne kadar hızlı iptal ederse etsin conv_id atanmış ve
@@ -518,8 +499,7 @@ def api_send():
             yield f"data: {json.dumps({'type': 'conv_id', 'conv_id': new_local_conv_id})}\n\n"
 
         try:
-            for event in stream_message(token, api_conv_id, api_message, model, [], attachments):
-                yield event
+            for event in stream_message(token, api_conv_id, api_message, model, [], attachments, sess):
                 if event.startswith("data: "):
                     try:
                         d = json.loads(event[6:])
@@ -535,8 +515,11 @@ def api_send():
                         elif d.get('type') == 'billing':
                             sess['total_credits'] += d.get('credits', 0)
                             sess['total_cost'] += d.get('cost', 0.0)
+                        elif d.get('type') == 'stream_interrupted':
+                            full_response = d.get('full_response', full_response)
                     except Exception:
                         pass
+                yield event
         except GeneratorExit:
             pass
         finally:
@@ -545,17 +528,20 @@ def api_send():
                 if ai_turn_index < len(sess['history']):
                     sess['history'][ai_turn_index] = {"role": "assistant", "content": full_response}
                 save_conv_to_history(sess)
-                # Bu turun kesintiye uğradığını işaretle — bir sonraki /api/send
-                # isteğinde bilinen TAM geçmiş, üçüncü parti servise bağlam
-                # olarak yeniden gömülecek (onun bu conversation_id için
-                # hafızası eksik/güncel olmayabileceği için).
-                sess['last_turn_interrupted'] = True
-            else:
-                sess['last_turn_interrupted'] = False
 
     return Response(generate(), mimetype='text/event-stream',
                     headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no',
                               'Connection': 'close'})
+
+
+@app.route('/api/abort', methods=['POST'])
+def api_abort():
+    sess = get_sess()
+    if not sess:
+        return jsonify({'error': 'Oturum bulunamadı.'}), 401
+
+    sess['aborted'] = True
+    return jsonify({'success': True})
 
 
 @app.route('/api/upload', methods=['POST'])
@@ -613,8 +599,6 @@ def api_new_chat():
     save_conv_to_history(sess)
     sess['history'] = []
     sess['active_local_conv_id'] = None
-    sess['pending_context'] = None
-    sess['last_turn_interrupted'] = False
 
     api_conv_id = create_conversation(sess['token'], sess['user_id'], sess['model'])
     if not api_conv_id:
@@ -629,7 +613,6 @@ def api_new_chat():
         # Geçmişi session'a yükle; bir sonraki mesaja bağlam olarak gömülecek
         sess['history']              = carry_history
         sess['active_local_conv_id'] = carry_local_id
-        sess['pending_context']      = format_history_context(carry_history)
         new_conv_id                  = carry_local_id
         # conversations listesindeki api_conv_id'yi güncelle
         for c in sess.get('conversations', []):
@@ -698,7 +681,6 @@ def api_reset():
         # bu geçmişi bilmediği için.
         sess['history']              = carry_history
         sess['active_local_conv_id'] = carry_local_id
-        sess['pending_context']      = format_history_context(carry_history)
         new_conv_id                  = carry_local_id
         # conversations listesindeki kaydın api_conv_id'sini güncelle
         for c in sess['conversations']:
@@ -744,7 +726,6 @@ def api_model():
         sess['own_api_conv_ids'].add(api_conv_id)
         sess['history'] = []
         sess['active_local_conv_id'] = None
-        sess['pending_context'] = None
 
     return jsonify({'success': True, 'model': model})
 
@@ -757,8 +738,6 @@ def api_clear():
     save_conv_to_history(sess)
     sess['history'] = []
     sess['active_local_conv_id'] = None
-    sess['pending_context'] = None
-    sess['last_turn_interrupted'] = False
     api_conv_id = create_conversation(sess['token'], sess['user_id'], sess['model'])
     if api_conv_id:
         sess['api_conv_id']         = api_conv_id
@@ -833,7 +812,6 @@ def _switch_to_conv(sess, conv_id):
             if stored_api_id == primary and primary:
                 # Bu hesabın ana konuşması — server zaten hatırlıyor
                 sess['api_conv_id']     = primary
-                sess['pending_context'] = None
             else:
                 # Yabancı konuşma — hesap için paylaşılan scratch'i kullan
                 scratch = sess.get('scratch_api_conv_id')
@@ -847,11 +825,9 @@ def _switch_to_conv(sess, conv_id):
                     sess['api_conv_id'] = scratch
                     c['api_conv_id']    = scratch
                 # scratch oluşturulamadıysa mevcut api_conv_id ile devam edilir
-                sess['pending_context'] = None
 
             sess['history']              = history
             sess['active_local_conv_id'] = conv_id
-            sess['last_turn_interrupted'] = False
             return True, conv_id, len(history) // 2
 
     return False, None, 0
@@ -906,7 +882,6 @@ def api_conversation_delete():
     if sess.get('active_local_conv_id') == conv_id:
         sess['history'] = []
         sess['active_local_conv_id'] = None
-        sess['pending_context'] = None
         if sess.get('primary_api_conv_id'):
             sess['api_conv_id'] = sess['primary_api_conv_id']
 
