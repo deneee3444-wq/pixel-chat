@@ -457,20 +457,48 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
 .input-inner{max-width:760px;margin:0 auto}
 
 .attachments-preview{
-  display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;
+  display:grid;
+  grid-template-columns:repeat(auto-fill, minmax(76px, 1fr));
+  gap:8px;margin-bottom:10px;
+  overflow:hidden;
 }
 .att-chip{
-  display:flex;align-items:center;gap:6px;padding:5px 10px 5px 8px;
-  background:var(--surface2);border:1px solid var(--border);border-radius:8px;
-  font-size:12px;color:var(--text2);
+  position:relative;display:flex;flex-direction:column;
+  background:var(--surface2);border:1px solid var(--border);border-radius:10px;
+  overflow:hidden;
 }
-.att-chip img{width:24px;height:24px;object-fit:cover;border-radius:4px}
+.att-chip img{width:100%;height:60px;object-fit:cover;display:block}
+.att-chip-name{
+  font-size:9.5px;color:var(--text2);padding:4px 5px;
+  overflow:hidden;white-space:nowrap;text-overflow:ellipsis;
+  direction:ltr;
+}
 .att-chip button{
-  background:none;border:none;cursor:pointer;color:var(--text3);
-  padding:0;line-height:1;font-size:14px;margin-left:2px;
-  transition:color .15s;
+  position:absolute;top:3px;right:3px;
+  width:18px;height:18px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(0,0,0,.55);border:none;cursor:pointer;color:#fff;
+  padding:0;line-height:1;font-size:13px;
+  transition:background .15s,opacity .15s;opacity:0;
 }
-.att-chip button:hover{color:var(--error)}
+.att-chip:hover button{opacity:1}
+.att-chip button:hover{background:var(--error)}
+.att-chip-more{
+  height:84px;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--surface2);border:1px solid var(--border);border-radius:10px;
+  font-size:15px;font-weight:600;color:var(--text2);
+  cursor:default;
+}
+
+@media(hover:none){
+  .att-chip button{opacity:1;background:rgba(0,0,0,.6)}
+}
+@media(max-width:768px){
+  .attachments-preview{grid-template-columns:repeat(auto-fill, minmax(64px, 1fr))}
+  .att-chip img{height:50px}
+  .att-chip-more{height:72px}
+}
 
 .input-box{
   display:flex;flex-direction:column;align-items:stretch;gap:6px;
@@ -1648,15 +1676,59 @@ async function handleFiles(input) {
   }
 }
 
+function truncateFileName(name, maxLen = 14) {
+  if (!name) return '';
+  const dotIdx = name.lastIndexOf('.');
+  const hasExt = dotIdx > 0 && dotIdx < name.length - 1 && name.length - dotIdx <= 6;
+  const ext = hasExt ? name.slice(dotIdx) : '';
+  const base = hasExt ? name.slice(0, dotIdx) : name;
+  const keep = Math.max(3, maxLen - ext.length - 3);
+  if (base.length + ext.length <= maxLen) return name;
+  return base.slice(0, keep) + '...' + ext;
+}
+
 function renderAttachPreview() {
   const prev = document.getElementById('attachPreview');
-  prev.innerHTML = S.pendingAtts.map((a,i) => `
-    <div class="att-chip">
-      <img src="${a.url}" alt="${a.name}">
-      <span>${a.name}</span>
+  const atts = S.pendingAtts;
+  if (!atts.length) { prev.innerHTML = ''; return; }
+
+  // Render all chips first to measure how many fit within 2 rows
+  // for the current container width.
+  prev.innerHTML = atts.map((a,i) => `
+    <div class="att-chip" data-idx="${i}">
+      <img src="${a.url}" alt="${escHtml(a.name || '')}">
+      <div class="att-chip-name" title="${escHtml(a.name || '')}">${escHtml(truncateFileName(a.name))}</div>
       <button onclick="removeAtt(${i})" title="Kaldır">×</button>
     </div>
   `).join('');
+
+  requestAnimationFrame(() => {
+    const chips = Array.from(prev.querySelectorAll('.att-chip'));
+    if (!chips.length) return;
+    const firstTop = chips[0].offsetTop;
+    const rowH = chips[0].offsetHeight;
+    // Row boundary: anything starting beyond ~2 row-heights from the first chip's top is row 3+
+    const twoRowLimit = firstTop + rowH * 2 + 6;
+    let visibleCount = chips.length;
+    for (let i = 0; i < chips.length; i++) {
+      if (chips[i].offsetTop >= twoRowLimit) { visibleCount = i; break; }
+    }
+
+    if (visibleCount >= chips.length) return; // everything fits in 2 rows already
+
+    // Reserve the last visible slot for the "+N" indicator
+    const keep = Math.max(0, visibleCount - 1);
+    const hiddenCount = atts.length - keep;
+    let html = atts.slice(0, keep).map((a,i) => `
+      <div class="att-chip" data-idx="${i}">
+        <img src="${a.url}" alt="${escHtml(a.name || '')}">
+        <div class="att-chip-name" title="${escHtml(a.name || '')}">${escHtml(truncateFileName(a.name))}</div>
+        <button onclick="removeAtt(${i})" title="Kaldır">×</button>
+      </div>
+    `).join('');
+    html += `<div class="att-chip-more" title="${hiddenCount} ek daha">+${hiddenCount}</div>`;
+    prev.innerHTML = html;
+  });
 }
 
 function removeAtt(i) {
