@@ -1656,7 +1656,8 @@ async function handleFiles(input) {
   input.value = '';
   for (const file of files) {
     if (!file.type.startsWith('image/')) { toast('Sadece resim dosyaları desteklenir', 'warn'); continue; }
-    toast(`${file.name} yükleniyor...`);
+    const shortName = truncateFileName(file.name, 28);
+    toast(`${shortName} yükleniyor...`);
     const fd = new FormData();
     fd.append('file', file);
     if (S.activeConvId) fd.append('conv_id', S.activeConvId);
@@ -1666,7 +1667,7 @@ async function handleFiles(input) {
       if (d.url) {
         S.pendingAtts.push({url:d.url, type:d.type, name:file.name});
         renderAttachPreview();
-        toast(`${file.name} eklendi ✓`, 'success');
+        toast(`${shortName} eklendi ✓`, 'success');
       } else {
         toast(d.error || 'Yükleme başarısız', 'error');
       }
