@@ -340,10 +340,13 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
 /* Sağlı-sollu (chat bubble) layout: user messages on the right, AI stays on the left */
 .msg.user{justify-content:flex-end}
 .msg.user .msg-avatar-col{order:2}
-.msg.user .msg-body{order:1;flex:0 1 auto;max-width:92%;position:relative}
+.msg.user .msg-body{
+  order:1;flex:0 1 auto;max-width:92%;position:relative;
+  display:flex;flex-direction:column;align-items:flex-end;
+}
 .msg.user .msg-role{justify-content:flex-end;position:absolute;top:4px;right:0;margin-bottom:0;width:max-content;max-width:100%}
-.msg.user .msg-text{text-align:left;padding-top:21px}
-.msg.user .msg-images{justify-content:flex-end}
+.msg.user .msg-text{text-align:left;padding-top:21px;max-width:100%}
+.msg.user .msg-images{justify-content:flex-end;max-width:100%}
 .msg.ai .msg-body{max-width:92%}
 
 .msg-text{color:var(--text);line-height:1.7;word-wrap:break-word;overflow-wrap:break-word;min-width:0}
@@ -457,17 +460,26 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
 .input-inner{max-width:760px;margin:0 auto}
 
 .attachments-preview{
-  display:grid;
-  grid-template-columns:repeat(auto-fill, minmax(76px, 1fr));
+  display:flex;
+  flex-wrap:nowrap;
   gap:8px;margin-bottom:10px;
-  overflow:hidden;
+  overflow-x:auto;
+  overflow-y:hidden;
+  padding-bottom:3px; /* kaydırma çubuğuna yer aç */
+  -webkit-overflow-scrolling:touch;
 }
 .att-chip{
   position:relative;display:flex;flex-direction:column;
   background:var(--surface2);border:1px solid var(--border);border-radius:10px;
   overflow:hidden;
+  width:76px;flex:0 0 auto;
+  -webkit-touch-callout:none;
+  -webkit-user-select:none;user-select:none;
 }
-.att-chip img{width:100%;height:60px;object-fit:cover;display:block}
+.att-chip img{
+  width:100%;height:60px;object-fit:cover;display:block;
+  -webkit-user-drag:none;pointer-events:none;
+}
 .att-chip-name{
   font-size:9.5px;color:var(--text2);padding:4px 5px;
   overflow:hidden;white-space:nowrap;text-overflow:ellipsis;
@@ -483,21 +495,13 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
 }
 .att-chip:hover button{opacity:1}
 .att-chip button:hover{background:var(--error)}
-.att-chip-more{
-  height:84px;
-  display:flex;align-items:center;justify-content:center;
-  background:var(--surface2);border:1px solid var(--border);border-radius:10px;
-  font-size:15px;font-weight:600;color:var(--text2);
-  cursor:default;
-}
 
 @media(hover:none){
   .att-chip button{opacity:1;background:rgba(0,0,0,.6)}
 }
 @media(max-width:768px){
-  .attachments-preview{grid-template-columns:repeat(auto-fill, minmax(64px, 1fr))}
+  .att-chip{width:64px}
   .att-chip img{height:50px}
-  .att-chip-more{height:72px}
 }
 
 .input-box{
@@ -941,6 +945,7 @@ const S = {
   msgCount: 0,
   pendingAtts: [],
   streaming: false,
+  stopping: false,
   abortController: null,
   activeConvIdx: null,
   activeConvId: null,
@@ -1311,9 +1316,24 @@ async function loadHistory() {
 }
 
 // ─── STOP STREAMING ───────────────────────────────────────────────────
-function stopStreaming() {
-  if (!S.streaming || !S.abortController) return;
-  S.abortController.abort();
+async function stopStreaming() {
+  if (!S.streaming || S.stopping) return;
+  S.stopping = true;
+  setSendDisabled(true);
+
+  try {
+    await fetch('/api/abort', { method: 'POST' });
+  } catch (e) {
+    console.error('Abort request failed:', e);
+  }
+
+  // Fallback safety timeout
+  setTimeout(() => {
+    if (S.streaming && S.stopping && S.abortController) {
+      console.warn('Abort timeout: forcing connection close.');
+      S.abortController.abort();
+    }
+  }, 8000);
 }
 
 // ─── SEND MESSAGE ─────────────────────────────────────────────────────
@@ -1338,12 +1358,6 @@ async function sendMessage() {
   S.pendingAtts = [];
   document.getElementById('attachPreview').innerHTML = '';
 
-  // Sunucuya gönderilecek tam geçmiş — ekrandaki en son haliyle (kesintiye uğramış
-  // yarım cevaplar dahil) DOM'dan alınır. Böylece bağlantı koptuğunda backend'in
-  // kendi geçmiş kaydı eksik/güncel olmasa bile, istemci tarafı her zaman ekranda
-  // ne görünüyorsa onu history olarak yollar.
-  const priorHistory = getHistoryData();
-
   hideEmpty();
   appendMessage('user', msg, atts.map(a=>a.url));
   const aiEl = appendMessage('ai', '', [], true);
@@ -1364,8 +1378,7 @@ async function sendMessage() {
       body: JSON.stringify({
         message: msg,
         attachments: atts.map(a=>({url:a.url,type:a.type})),
-        conv_id: S.activeConvId || null,
-        history: priorHistory
+        conv_id: S.activeConvId || null
       })
     });
 
@@ -1420,14 +1433,12 @@ async function sendMessage() {
             await refreshConversations();
             terminal = true;
           } else if (d.type === 'stream_interrupted') {
-            // Akış kesildi — geçmişe kısmı kaydedildi, "Devam et" gerekli
-            if (d.full_response || full) {
-              renderMarkdown(textNode, d.full_response || full, false);
-              S.msgCount++;
-              updateSidebar();
-              await refreshConversations();
-            }
-            postAction = { kind: 'interrupted', pendingAtts: [...atts] };
+            // Akış kesildi — ekranda biriken kısmi cevabı koru
+            renderMarkdown(textNode, d.full_response || '', false);
+            S.msgCount++;
+            updateSidebar();
+            await refreshConversations();
+            postAction = { kind: 'interrupted', pendingAtts: [...atts], hasContent: !!(d.full_response || full) };
             terminal = true;
           } else if (d.type === 'error') {
             if (d.code === 'LOCKED') {
@@ -1455,20 +1466,14 @@ async function sendMessage() {
     }
   } catch(e) {
     if (e.name === 'AbortError') {
-      if (full) {
-        renderMarkdown(textNode, full, false);
-      } else {
-        aiEl.remove();
-      }
-      // İptal sonrası conv kaydedildi (backend), listeyi güncelle
+      // Bağlantı koptu veya zaman aşımı — backend'deki güncel geçmişi çekerek senkronize ol
+      await loadHistory();
       await refreshConversations();
     } else if (full) {
-      // Gerçek bağlantı kopması (network kesintisi) ama akıştan bir miktar
-      // cevap geldi — abort durumundaki gibi davran: kısmi cevabı koru ve
-      // "Devam et" akışını (oto/manuel) tetikle. priorHistory zaten bu kısmi
-      // cevabı da içerecek şekilde bir sonraki gönderimde sunucuya gidecek.
+      // Gerçek bağlantı kopması — ekranda biriken cevabı koru
       renderMarkdown(textNode, full, false);
-      postAction = { kind: 'interrupted', pendingAtts: [...atts] };
+      await refreshConversations();
+      postAction = { kind: 'interrupted', pendingAtts: [...atts], hasContent: true };
     } else {
       textNode.innerHTML = `<span style="color:var(--error)">Bağlantı hatası: ${e.message}</span>`;
       markUserMsgFailed();
@@ -1476,6 +1481,7 @@ async function sendMessage() {
   } finally {
     S.abortController = null;
     S.streaming = false;
+    S.stopping = false;
     setSendDisabled(false);
     scrollBottom();
   }
@@ -1492,11 +1498,15 @@ async function sendMessage() {
         // her şey siliniyor. Loglar artık fonksiyon içinde, temizlikten SONRA yazılıyor.
         await doAutoNewChatBackground('Devam et', postAction.pendingAtts, 'interrupted');
       } else {
-        addSystemLog('⚠️ Akış kesildi — cevap tamamlanmadı.');
-        const inp = document.getElementById('msgInput');
-        if (!inp.value.trim()) {
-          inp.value = 'Devam et';
-          autoResize(inp);
+        if (postAction.hasContent) {
+          addSystemLog('⚠️ Akış kesildi — cevap tamamlanmadı.');
+          const inp = document.getElementById('msgInput');
+          if (!inp.value.trim()) {
+            inp.value = 'Devam et';
+            autoResize(inp);
+          }
+        } else {
+          addSystemLog('⚠️ Akış iptal edildi.');
         }
       }
     } else if (postAction.kind === 'locked') {
@@ -1679,13 +1689,8 @@ async function handleFiles(input) {
 
 function truncateFileName(name, maxLen = 14) {
   if (!name) return '';
-  const dotIdx = name.lastIndexOf('.');
-  const hasExt = dotIdx > 0 && dotIdx < name.length - 1 && name.length - dotIdx <= 6;
-  const ext = hasExt ? name.slice(dotIdx) : '';
-  const base = hasExt ? name.slice(0, dotIdx) : name;
-  const keep = Math.max(3, maxLen - ext.length - 3);
-  if (base.length + ext.length <= maxLen) return name;
-  return base.slice(0, keep) + '...' + ext;
+  if (name.length <= maxLen) return name;
+  return name.slice(0, maxLen) + '...';
 }
 
 function renderAttachPreview() {
@@ -1693,43 +1698,15 @@ function renderAttachPreview() {
   const atts = S.pendingAtts;
   if (!atts.length) { prev.innerHTML = ''; return; }
 
-  // Render all chips first to measure how many fit within 2 rows
-  // for the current container width.
+  // Tek satır, yatay kaydırmalı: hepsini sırayla render et, gizleme/"+N" yok.
+  // İsim kesme tek elden CSS ellipsis ile yapılır (çift kesilme/çift nokta olmasın diye).
   prev.innerHTML = atts.map((a,i) => `
     <div class="att-chip" data-idx="${i}">
-      <img src="${a.url}" alt="${escHtml(a.name || '')}">
-      <div class="att-chip-name" title="${escHtml(a.name || '')}">${escHtml(truncateFileName(a.name))}</div>
+      <img src="${a.url}" alt="${escHtml(a.name || '')}" draggable="false">
+      <div class="att-chip-name">${escHtml(a.name || '')}</div>
       <button onclick="removeAtt(${i})" title="Kaldır">×</button>
     </div>
   `).join('');
-
-  requestAnimationFrame(() => {
-    const chips = Array.from(prev.querySelectorAll('.att-chip'));
-    if (!chips.length) return;
-    const firstTop = chips[0].offsetTop;
-    const rowH = chips[0].offsetHeight;
-    // Row boundary: anything starting beyond ~2 row-heights from the first chip's top is row 3+
-    const twoRowLimit = firstTop + rowH * 2 + 6;
-    let visibleCount = chips.length;
-    for (let i = 0; i < chips.length; i++) {
-      if (chips[i].offsetTop >= twoRowLimit) { visibleCount = i; break; }
-    }
-
-    if (visibleCount >= chips.length) return; // everything fits in 2 rows already
-
-    // Reserve the last visible slot for the "+N" indicator
-    const keep = Math.max(0, visibleCount - 1);
-    const hiddenCount = atts.length - keep;
-    let html = atts.slice(0, keep).map((a,i) => `
-      <div class="att-chip" data-idx="${i}">
-        <img src="${a.url}" alt="${escHtml(a.name || '')}">
-        <div class="att-chip-name" title="${escHtml(a.name || '')}">${escHtml(truncateFileName(a.name))}</div>
-        <button onclick="removeAtt(${i})" title="Kaldır">×</button>
-      </div>
-    `).join('');
-    html += `<div class="att-chip-more" title="${hiddenCount} ek daha">+${hiddenCount}</div>`;
-    prev.innerHTML = html;
-  });
 }
 
 function removeAtt(i) {
@@ -1968,19 +1945,48 @@ function toast(msg, type='') {
 
 // ─── UTILS ────────────────────────────────────────────────────────────
 function setSendDisabled(d) {
-  document.getElementById('attachBtn').disabled = d;
+  const attachBtn = document.getElementById('attachBtn');
   const sendBtn = document.getElementById('sendBtn');
-  if (!sendBtn) return;
+  const msgInput = document.getElementById('msgInput');
 
-  sendBtn.disabled = false;
-  if (d) {
-    sendBtn.title = 'Durdur';
-    sendBtn.setAttribute('aria-label', 'Durdur');
-    sendBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg>';
+  if (S.stopping) {
+    if (attachBtn) attachBtn.disabled = true;
+    if (msgInput) {
+      msgInput.disabled = true;
+      msgInput.placeholder = 'Durduruluyor...';
+    }
+    if (sendBtn) {
+      sendBtn.disabled = true;
+      sendBtn.title = 'Durduruluyor...';
+      sendBtn.setAttribute('aria-label', 'Durduruluyor...');
+      sendBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation: spin 1s linear infinite; transform-origin: center;">
+        <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2.5" stroke-dasharray="32 10" fill="none" />
+      </svg>`;
+    }
+  } else if (d) {
+    if (attachBtn) attachBtn.disabled = true;
+    if (msgInput) {
+      msgInput.disabled = false;
+      msgInput.placeholder = 'Mesajınızı yazın...';
+    }
+    if (sendBtn) {
+      sendBtn.disabled = false;
+      sendBtn.title = 'Durdur';
+      sendBtn.setAttribute('aria-label', 'Durdur');
+      sendBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg>';
+    }
   } else {
-    sendBtn.title = 'Gönder';
-    sendBtn.setAttribute('aria-label', 'Gönder');
-    sendBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>';
+    if (attachBtn) attachBtn.disabled = false;
+    if (msgInput) {
+      msgInput.disabled = false;
+      msgInput.placeholder = 'Mesajınızı yazın...';
+    }
+    if (sendBtn) {
+      sendBtn.disabled = false;
+      sendBtn.title = 'Gönder';
+      sendBtn.setAttribute('aria-label', 'Gönder');
+      sendBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>';
+    }
   }
 }
 
