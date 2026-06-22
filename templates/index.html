@@ -462,17 +462,37 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
 .attachments-preview{
   display:flex;
   flex-wrap:nowrap;
-  gap:8px;margin-bottom:10px;
+  gap:8px;
   overflow-x:auto;
   overflow-y:hidden;
-  padding-bottom:3px; /* kaydırma çubuğuna yer aç */
   -webkit-overflow-scrolling:touch;
+  scroll-snap-type:x mandatory;
+  scrollbar-width:thin;
+  scrollbar-color:var(--border) transparent;
+  /* Boş olduğunda hiç yer kaplamasın */
+  max-height:0;
+  padding:0;
+  margin:0;
+  transition:max-height .15s ease, padding .15s ease, margin .15s ease;
+}
+.attachments-preview::-webkit-scrollbar{height:4px}
+.attachments-preview::-webkit-scrollbar-track{background:transparent}
+.attachments-preview::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.attachments-preview.has-items{
+  max-height:112px;
+  overflow-x:auto;
+  overflow-y:hidden;
+  padding-top:2px;
+  padding-bottom:10px;
+  margin-bottom:8px;
+  border-bottom:1px solid var(--border);
 }
 .att-chip{
   position:relative;display:flex;flex-direction:column;
   background:var(--surface2);border:1px solid var(--border);border-radius:10px;
   overflow:hidden;
-  width:76px;flex:0 0 auto;
+  width:76px;flex:0 0 76px;
+  scroll-snap-align:start;
   -webkit-touch-callout:none;
   -webkit-user-select:none;user-select:none;
 }
@@ -500,7 +520,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
   .att-chip button{opacity:1;background:rgba(0,0,0,.6)}
 }
 @media(max-width:768px){
-  .att-chip{width:64px}
+  .att-chip{width:64px;flex:0 0 64px}
   .att-chip img{height:50px}
 }
 
@@ -878,8 +898,8 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
     <!-- INPUT AREA -->
     <div class="input-area">
       <div class="input-inner">
-        <div class="attachments-preview" id="attachPreview"></div>
         <div class="input-box" id="inputBox">
+          <div class="attachments-preview" id="attachPreview"></div>
           <textarea id="msgInput" placeholder="Mesajınızı yazın..."
             onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
           <div class="input-actions">
@@ -1696,7 +1716,11 @@ function truncateFileName(name, maxLen = 14) {
 function renderAttachPreview() {
   const prev = document.getElementById('attachPreview');
   const atts = S.pendingAtts;
-  if (!atts.length) { prev.innerHTML = ''; return; }
+  if (!atts.length) {
+    prev.innerHTML = '';
+    prev.classList.remove('has-items');
+    return;
+  }
 
   // Tek satır, yatay kaydırmalı: hepsini sırayla render et, gizleme/"+N" yok.
   // İsim kesme tek elden CSS ellipsis ile yapılır (çift kesilme/çift nokta olmasın diye).
@@ -1707,6 +1731,18 @@ function renderAttachPreview() {
       <button onclick="removeAtt(${i})" title="Kaldır">×</button>
     </div>
   `).join('');
+  prev.classList.add('has-items');
+  // Kaydirma snap ayari - son chip tam gorunsun
+  requestAnimationFrame(() => {
+    const chipW = prev.querySelector('.att-chip') ? prev.querySelector('.att-chip').offsetWidth : 76;
+    const gap = 8;
+    const total = atts.length * chipW + (atts.length - 1) * gap;
+    if (total <= prev.clientWidth) {
+      prev.style.overflowX = 'hidden';
+    } else {
+      prev.style.overflowX = 'auto';
+    }
+  });
 }
 
 function removeAtt(i) {
