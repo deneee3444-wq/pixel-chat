@@ -31,6 +31,8 @@
   --success: #16a34a;
   --warn: #d97706;
   --sidebar-w: 260px;
+  --chip-w: calc((100% - 64px) / 9);
+  --chip-h: 82px;
 }
 
 [data-theme="dark"] {
@@ -305,12 +307,12 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
 
 /* ─── MESSAGES ─── */
 .messages{
-  flex:1;min-height:0;overflow:hidden;padding:24px 0 8px;
+  flex:1;min-height:0;overflow:hidden;padding:24px 0 0;
   display:flex;flex-direction:column;
 }
 .messages-inner{
   flex:1;min-height:0;
-  max-width:760px;width:100%;margin:0 auto;padding:0 20px 12px;
+  max-width:760px;width:100%;margin:0 auto;padding:0 20px 48px;
   overflow-y:auto;overflow-x:hidden;
   scrollbar-gutter: stable;
   overscroll-behavior: contain;
@@ -455,44 +457,53 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
 
 /* ─── INPUT AREA ─── */
 .input-area{
-  padding:12px 20px 20px;
+  padding:0 20px 20px;
+  position:relative;
+  z-index:10;
 }
 .input-inner{max-width:760px;margin:0 auto}
 
-.attachments-preview{
-  display:flex;
-  flex-wrap:nowrap;
-  gap:8px;
-  overflow-x:auto;
-  overflow-y:hidden;
-  -webkit-overflow-scrolling:touch;
-  scroll-snap-type:x mandatory;
-  scrollbar-width:thin;
-  scrollbar-color:var(--border) transparent;
+.attachments-preview-container{
   /* Boş olduğunda hiç yer kaplamasın */
   max-height:0;
+  overflow:hidden;
   padding:0;
   margin:0;
   transition:max-height .15s ease, padding .15s ease, margin .15s ease;
 }
-.attachments-preview::-webkit-scrollbar{height:4px}
-.attachments-preview::-webkit-scrollbar-track{background:transparent}
-.attachments-preview::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
-.attachments-preview.has-items{
-  max-height:112px;
-  overflow-x:auto;
-  overflow-y:hidden;
-  padding-top:2px;
-  padding-bottom:10px;
+.attachments-preview-container.has-items{
   margin-bottom:8px;
   border-bottom:1px solid var(--border);
+  max-height: 200px;
+  padding-bottom: 12px; /* Symmetrical 12px gap when no scrollbar */
 }
+.attachments-preview-container.has-items.has-scrollbar{
+  max-height: 200px;
+  padding-bottom: 12px; /* Symmetrical 12px gap below scrollbar */
+}
+.attachments-preview{
+  display:flex;
+  flex-wrap:nowrap;
+  gap:8px;
+  overflow-x:auto !important;
+  overflow-y:hidden;
+  -webkit-overflow-scrolling:touch;
+  padding-top:2px;
+  padding-bottom:0;
+}
+.attachments-preview-container.has-scrollbar .attachments-preview{
+  padding-bottom:16px; /* Symmetrical 12px gap above scrollbar (16px - 4px scrollbar height) */
+}
+.attachments-preview::-webkit-scrollbar{height:4px}
+.attachments-preview::-webkit-scrollbar-track{background:transparent}
+.attachments-preview::-webkit-scrollbar-thumb{background:var(--text3);border-radius:2px;border:none}
+.attachments-preview::-webkit-scrollbar-thumb:hover{background:var(--text2)}
 .att-chip{
   position:relative;display:flex;flex-direction:column;
   background:var(--surface2);border:1px solid var(--border);border-radius:10px;
   overflow:hidden;
-  width:76px;flex:0 0 76px;
-  scroll-snap-align:start;
+  width: var(--chip-w); flex: 0 0 var(--chip-w);
+  height: var(--chip-h);
   -webkit-touch-callout:none;
   -webkit-user-select:none;user-select:none;
 }
@@ -520,7 +531,10 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
   .att-chip button{opacity:1;background:rgba(0,0,0,.6)}
 }
 @media(max-width:768px){
-  .att-chip{width:64px;flex:0 0 64px}
+  :root {
+    --chip-w: calc((100% - 32px) / 5);
+    --chip-h: 78px;
+  }
   .att-chip img{height:50px}
 }
 
@@ -745,12 +759,14 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
     flex:1;min-height:0;
     display:flex;flex-direction:column;
   }
-  .messages{flex:1;min-height:0;overflow:hidden;padding:12px 0 4px}
+  .messages{flex:1;min-height:0;overflow:hidden;padding:12px 0 0}
   .input-area{
-    padding:8px 12px calc(env(safe-area-inset-bottom, 0px) + 18px);
+    padding:0 12px calc(env(safe-area-inset-bottom, 0px) + 12px);
     flex-shrink:0;
+    position:relative;
+    z-index:10;
   }
-  .messages-inner{padding:0 12px 10px}
+  .messages-inner{padding:0 12px 40px}
   .msg-images img{max-width:min(200px,60vw)}
   .setup-card{padding:32px 24px}
   .modal{padding:24px 20px}
@@ -899,7 +915,9 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
     <div class="input-area">
       <div class="input-inner">
         <div class="input-box" id="inputBox">
-          <div class="attachments-preview" id="attachPreview"></div>
+          <div class="attachments-preview-container" id="attachPreviewContainer">
+            <div class="attachments-preview" id="attachPreview"></div>
+          </div>
           <textarea id="msgInput" placeholder="Mesajınızı yazın..."
             onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
           <div class="input-actions">
@@ -1376,7 +1394,7 @@ async function sendMessage() {
 
   const atts = [...S.pendingAtts];
   S.pendingAtts = [];
-  document.getElementById('attachPreview').innerHTML = '';
+  renderAttachPreview();
 
   hideEmpty();
   appendMessage('user', msg, atts.map(a=>a.url));
@@ -1715,10 +1733,13 @@ function truncateFileName(name, maxLen = 14) {
 
 function renderAttachPreview() {
   const prev = document.getElementById('attachPreview');
+  const container = document.getElementById('attachPreviewContainer') || prev;
   const atts = S.pendingAtts;
   if (!atts.length) {
     prev.innerHTML = '';
-    prev.classList.remove('has-items');
+    container.classList.remove('has-items');
+    container.classList.remove('has-scrollbar');
+    scrollBottom(true);
     return;
   }
 
@@ -1731,18 +1752,18 @@ function renderAttachPreview() {
       <button onclick="removeAtt(${i})" title="Kaldır">×</button>
     </div>
   `).join('');
-  prev.classList.add('has-items');
-  // Kaydirma snap ayari - son chip tam gorunsun
-  requestAnimationFrame(() => {
-    const chipW = prev.querySelector('.att-chip') ? prev.querySelector('.att-chip').offsetWidth : 76;
-    const gap = 8;
-    const total = atts.length * chipW + (atts.length - 1) * gap;
-    if (total <= prev.clientWidth) {
-      prev.style.overflowX = 'hidden';
-    } else {
-      prev.style.overflowX = 'auto';
-    }
-  });
+  container.classList.add('has-items');
+
+  // Toggle has-scrollbar class dynamically based on screen and items
+  const isMobile = window.innerWidth <= 768;
+  const hasScroll = isMobile ? (atts.length > 5) : (atts.length > 9);
+  if (hasScroll) {
+    container.classList.add('has-scrollbar');
+  } else {
+    container.classList.remove('has-scrollbar');
+  }
+
+  scrollBottom(true);
 }
 
 function removeAtt(i) {
@@ -2034,6 +2055,7 @@ function autoResize(el) {
 window.addEventListener('resize', () => {
   const ta = document.getElementById('msgInput');
   if (ta) autoResize(ta);
+  renderAttachPreview();
 });
 
 // ─── marked config ─────────────────────────────────────────────────────
