@@ -308,7 +308,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
 /* ─── MESSAGES ─── */
 .messages{
   flex:1;min-height:0;overflow:hidden;padding:24px 0 0;
-  display:flex;flex-direction:column;
+  display:flex;flex-direction:column;position:relative;
 }
 .messages-inner{
   flex:1;min-height:0;
@@ -318,6 +318,48 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
 }
+
+/* ─── SCROLL TO BOTTOM BUTTON ─── */
+.scroll-bottom-btn{
+  position:absolute;bottom:18px;left:50%;
+  transform:translateX(-50%) translateY(8px);
+  width:36px;height:36px;border-radius:50%;
+  background:var(--surface);border:1px solid var(--border);
+  box-shadow:0 4px 14px rgba(0,0,0,.12);
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;color:var(--text2);z-index:5;
+  opacity:0;pointer-events:none;
+  transition:opacity .18s ease,transform .18s ease,background .15s,color .15s;
+}
+.scroll-bottom-btn.show{opacity:1;pointer-events:auto;transform:translateX(-50%) translateY(0)}
+.scroll-bottom-btn:hover{background:var(--surface2);color:var(--text)}
+.scroll-bottom-btn svg{pointer-events:none}
+
+/* ─── LONG MESSAGE COLLAPSE ─── */
+.msg-text.collapsible{
+  max-height:480px;overflow:hidden;position:relative;
+}
+.msg-text.collapsible::after{
+  content:'';position:absolute;left:0;right:0;bottom:0;height:64px;
+  background:linear-gradient(to bottom, transparent, var(--bg));
+  pointer-events:none;
+}
+/* AI/assistant messages sit on the page background, so they match --bg above.
+   User messages also sit directly on --bg (no bubble), so the same fade applies —
+   keeping this explicit guards against future bubble-style changes. */
+.msg.user .msg-text.collapsible::after{
+  background:linear-gradient(to bottom, transparent, var(--bg));
+}
+.msg-expand-link{
+  display:inline-flex;align-items:center;gap:4px;
+  margin-top:6px;position:relative;z-index:1;
+  background:none;border:none;padding:0;font-family:inherit;
+  color:var(--text2);font-size:12.5px;font-weight:500;
+  cursor:pointer;transition:color .15s;
+}
+.msg-expand-link:hover{color:var(--accent-light)}
+.msg-expand-link svg{transition:transform .2s ease;flex-shrink:0}
+.msg-expand-link.expanded svg{transform:rotate(180deg)}
 
 .msg{
   display:flex;gap:14px;padding:6px 0 32px;
@@ -909,6 +951,9 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:
           <p>Bir şeyler yaz, hemen cevap vereyim.</p>
         </div>
       </div>
+      <button class="scroll-bottom-btn" id="scrollBottomBtn" title="En aşağı in" onclick="scrollBottom(true)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+      </button>
     </div>
 
     <!-- INPUT AREA -->
@@ -1629,6 +1674,7 @@ function appendMessage(role, text, images=[], streaming=false) {
   else if (streaming) textEl.innerHTML = '<div class="typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>';
 
   inner.appendChild(el);
+  requestAnimationFrame(updateScrollBottomBtn);
   return el;
 }
 
@@ -1640,6 +1686,7 @@ function escapeHtml(str) {
 
 function renderPlainText(el, text) {
   el.innerHTML = escapeHtml(text || '').replace(/\n/g, '<br>');
+  applyCollapseIfLong(el);
 }
 
 function renderMarkdown(el, text, streaming=false) {
@@ -1676,6 +1723,49 @@ function renderMarkdown(el, text, streaming=false) {
       pre.appendChild(btn);
     }
   });
+  if (!streaming) applyCollapseIfLong(el);
+}
+
+// ─── LONG MESSAGE COLLAPSE ("Daha fazlasını göster") ──────────────────
+const COLLAPSE_THRESHOLD = 480; // px, matches .msg-text.collapsible max-height
+
+function applyCollapseIfLong(el) {
+  // Reset any previous state before measuring fresh
+  el.classList.remove('collapsible');
+  const existingBtn = el.parentElement && el.parentElement.querySelector('.msg-expand-link');
+  if (existingBtn) existingBtn.remove();
+
+  // Measure natural height
+  requestAnimationFrame(() => {
+    const fullHeight = el.scrollHeight;
+    if (fullHeight <= COLLAPSE_THRESHOLD + 40) return; // not long enough to bother
+
+    el.classList.add('collapsible');
+    el.dataset.collapsed = '1';
+
+    const btn = document.createElement('button');
+    btn.className = 'msg-expand-link';
+    btn.innerHTML = `<span>Daha fazlasını göster</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>`;
+    btn.onclick = () => toggleMsgExpand(btn, el);
+    el.insertAdjacentElement('afterend', btn);
+  });
+}
+
+function toggleMsgExpand(btn, el) {
+  const collapsed = el.dataset.collapsed !== '0';
+  if (collapsed) {
+    el.classList.remove('collapsible');
+    el.dataset.collapsed = '0';
+    btn.classList.add('expanded');
+    btn.querySelector('span').textContent = 'Daha az göster';
+  } else {
+    el.classList.add('collapsible');
+    el.dataset.collapsed = '1';
+    btn.classList.remove('expanded');
+    btn.querySelector('span').textContent = 'Daha fazlasını göster';
+    // Scroll the message back into a sane view if we collapsed something off-screen above
+    el.scrollIntoView({block:'nearest'});
+  }
 }
 
 function getMessagesScrollEl() {
@@ -1695,7 +1785,32 @@ function scrollBottom(force=false) {
   requestAnimationFrame(() => {
     doScroll();
     requestAnimationFrame(doScroll);
+    requestAnimationFrame(updateScrollBottomBtn);
   });
+}
+
+// ─── SCROLL-TO-BOTTOM FLOATING BUTTON ─────────────────────────────────
+const SCROLL_BOTTOM_SLOP = 80; // px tolerance to still count as "at bottom"
+
+function isNearBottom(el) {
+  return (el.scrollHeight - el.scrollTop - el.clientHeight) <= SCROLL_BOTTOM_SLOP;
+}
+
+function updateScrollBottomBtn() {
+  const el = getMessagesScrollEl();
+  const btn = document.getElementById('scrollBottomBtn');
+  if (!el || !btn) return;
+  // Don't bother showing it if there's nothing to scroll at all
+  const scrollable = el.scrollHeight - el.clientHeight > 40;
+  const shouldShow = scrollable && !isNearBottom(el);
+  btn.classList.toggle('show', shouldShow);
+}
+
+function initScrollBottomWatcher() {
+  const el = getMessagesScrollEl();
+  if (el) el.addEventListener('scroll', updateScrollBottomBtn, {passive:true});
+  window.addEventListener('resize', updateScrollBottomBtn);
+  updateScrollBottomBtn();
 }
 
 // ─── FILE UPLOAD ───────────────────────────────────────────────────────
@@ -2619,6 +2734,7 @@ function triggerDownload(filename, content, mimeType) {
 
 // ─── BOOT ─────────────────────────────────────────────────────────────
 boot();
+initScrollBottomWatcher();
 </script>
 </body>
 </html>
